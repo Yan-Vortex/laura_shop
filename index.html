@@ -320,13 +320,17 @@ let editingId = null;
 let editingSectionId = null;
 
 // Fonction pour afficher les sections
+// Fonction pour afficher les sections
 async function renderSections() {
   try {
     const list = $('#sections-list');
     if (!list) return;
 
     list.innerHTML = '';
-    const sections = await loadSections();
+    let sections = await loadSections();
+    
+    // TRIER LES SECTIONS PAR ID DÉCROISSANT (LES PLUS RÉCENTES EN PREMIER)
+    sections.sort((a, b) => b.id - a.id);
 
     // Liste admin
     sections.forEach(s => {
@@ -349,7 +353,7 @@ async function renderSections() {
     qs('.edit-section').forEach(b => b.onclick = () => startEditSection(b.dataset.id));
     qs('.del-section').forEach(b => b.onclick = () => handleDeleteSection(b.dataset.id));
 
-    // Mise à jour des sélecteurs
+    // Mise à jour des sélecteurs avec les sections triées
     await updateSectionSelects(sections);
     buildSectionNav(sections);
     await renderSectionFilter();
@@ -357,12 +361,14 @@ async function renderSections() {
     console.error('Error in renderSections:', error);
   }
 }
-
+  
 async function updateSectionSelects(sections) {
   const sel = $('#section-select');
   if (!sel) return;
 
   sel.innerHTML = '<option value="">-- Choisir une section --</option>';
+  // TRIER LES SECTIONS PAR ID DÉCROISSANT
+  sections.sort((a, b) => b.id - a.id);
   sections.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.id;
@@ -376,7 +382,9 @@ async function renderSectionFilter() {
   if (!sel) return;
 
   sel.innerHTML = '<option value="">Toutes les sections</option>';
-  const sections = await loadSections();
+  let sections = await loadSections();
+  // TRIER LES SECTIONS PAR ID DÉCROISSANT
+  sections.sort((a, b) => b.id - a.id);
   sections.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.id;
@@ -553,6 +561,7 @@ function whatsappUrl(p) {
 }
 
 // Navigation par sections
+// Navigation par sections
 function buildSectionNav(sections) {
   const nav = $('#section-nav');
   if (!nav) return;
@@ -569,6 +578,9 @@ function buildSectionNav(sections) {
     renderProducts();
   };
   nav.appendChild(allBtn);
+
+  // TRIER LES SECTIONS PAR ID DÉCROISSANT
+  sections.sort((a, b) => b.id - a.id);
 
   sections.forEach(s => {
     const btn = document.createElement('button');
@@ -592,12 +604,11 @@ async function renderProducts() {
     grid.innerHTML = '';
 
     const products = await loadProducts();
-    const sections = await loadSections();
+    let sections = await loadSections();
     const q = normalizeString($('#search').value.trim());
     const sectionFilter = $('#section-filter').value;
     const sortVal = $('#sort').value;
 
-    // Trier les produits
     // Trier les produits - LES PLUS RÉCENTS EN PREMIER
     let sortedProducts = [...products];
     if (sortVal === 'price-asc') {
@@ -609,6 +620,9 @@ async function renderProducts() {
       sortedProducts.sort((a, b) => b.id - a.id);
     }
 
+    // TRIER LES SECTIONS PAR ID DÉCROISSANT
+    sections.sort((a, b) => b.id - a.id);
+
     // IDs des sections correspondant à la recherche
     const matchedSectionIds = new Set();
     if (q) {
@@ -617,7 +631,7 @@ async function renderProducts() {
       });
     }
 
-    // Afficher par section
+    // Afficher par section (déjà triées)
     for (const section of sections) {
       if (sectionFilter && section.id !== sectionFilter) continue;
 
@@ -796,5 +810,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </body>
 </html>
+
 
 
