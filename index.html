@@ -447,13 +447,43 @@ async function renderProducts(){
   if(sortVal === 'price-asc') products.sort((a,b)=>a.price - b.price);
   else if(sortVal === 'price-desc') products.sort((a,b)=>b.price - a.price);
 
-  // Determine matched section ids based on search query (so searching a section shows all its products)
-  const matchedSectionIds = new Set();
-  if(q){
-    sections.forEach(s=>{
-      if(normalizeString(s.name).includes(q)) matchedSectionIds.add(s.id);
-    });
+  for(const section of sections){
+    if(sectionFilter && String(section.id) !== String(sectionFilter)) continue;
+
+    let sectProducts = products.filter(p => String(p.sectionId) === String(section.id));
+
+    if(q){
+      sectProducts = sectProducts.filter(p => normalizeString(p.name+' '+(p.description||'')).includes(q));
+    }
+
+    if(sectProducts.length === 0) continue;
+
+    const secDiv = document.createElement('div');
+    secDiv.setAttribute('data-section', section.id);
+    secDiv.innerHTML = `<h3>${section.name}</h3>`;
+    const sectGrid = document.createElement('div'); sectGrid.className = 'grid';
+
+    for(const x of sectProducts){
+      const c = document.createElement('article'); c.className='card';
+      c.innerHTML = `
+        <div class='thumb'>${x.image ? `<img src='${x.image}'>` : '<div class="muted">Aucune image</div>'}</div>
+        <div class='card-body'>
+          <div class='name'>${x.name}</div>
+          <div class='desc'>${x.description||''}</div>
+          <div style='display:flex;justify-content:space-between;align-items:center'>
+            <div class='price'>${(x.price||0).toLocaleString()} Fcfa</div>
+            <div class='card-actions'>
+              <a class='small btn' href='${whatsappUrl(x)}' target='_blank'>${t('order')}</a>
+            </div>
+          </div>
+        </div>`;
+      sectGrid.appendChild(c);
+    }
+    secDiv.appendChild(sectGrid);
+    grid.appendChild(secDiv);
   }
+}
+
 
   // render per section
   for(const section of sections){
@@ -590,4 +620,5 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 </script>
 </body>
 </html>
+
 
