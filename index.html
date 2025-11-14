@@ -725,20 +725,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('#admin-btn').onclick = () => {
       const pw = prompt("Réservé à l'administrateur");
       if (pw === CONFIG.defaultPassword) {
-        setAdmin(true)
-          location.reload;
+        setAdmin(true);
       } else {
         alert('Mot de passe incorrect');
       }
     };
 
-    $('#logout').onclick = () => { 
-  setAdmin(false); 
-  // Rafraîchir la page après la déconnexion
-  setTimeout(() => {
-    location.reload();
-  }, 1);
-};
+    $('#logout').onclick = () => setAdmin(false);
     $('#add-btn').onclick = addOrUpdate;
     $('#cancel-edit').onclick = clearForm;
     $('#add-section-btn').onclick = addOrUpdateSection;
