@@ -346,35 +346,92 @@ $('#file').onchange = e=>{
   reader.readAsDataURL(f);
 };
 
-async function renderProducts(){
+async function renderProducts() {
+  const grid = $('#products-grid');
+  grid.innerHTML = '';
+  let products = await loadProducts();
   const sections = await loadSections();
-  const products = await loadProducts();
-  const grid = $('#products-grid'); grid.innerHTML='';
+  const q = normalizeString($('#search').value.trim());
+  const sectionFilter = $('#section-filter').value;
+  const sortVal = $('#sort').value;
 
-  sections.forEach(sec=>{
-    const secDiv = document.createElement('div');
-    secDiv.innerHTML = `<h3>${sec.name}</h3>`;
-    const cards = document.createElement('div'); cards.className='grid';
-    const secProducts = products.filter(p=>p.sectionId===sec.id);
-    secProducts.forEach(p=>{
-      const card = document.createElement('div'); card.className='card';
-      card.innerHTML = `
-        <div class="thumb"><img src="${p.image || ''}" alt="${p.name}"></div>
-        <div class="card-body">
-          <div class="name">${p.name}</div>
-          <div class="desc">${p.description||''}</div>
-          <div class="price">${p.price || 0} Fcfa</div>
-          ${isAdmin()?`<div class="card-actions admin-actions">
-            <button class="small btn" onclick="startEdit('${p.id}')">Edit</button>
-            <button class="small btn secondary" onclick="handleDelete('${p.id}')">Suppr</button>
-          </div>`:''}
-        </div>`;
-      cards.appendChild(card);
+  // Tri
+  if (sortVal === 'price-asc') products.sort((a, b) => a.price - b.price);
+  else if (sortVal === 'price-desc') products.sort((a, b) => b.price - a.price);
+
+  // Déterminer les sections correspondantes à la recherche
+  const matchedSectionIds = new Set();
+  if (q) {
+    sections.forEach(s => {
+      if (normalizeString(s.name).includes(q)) matchedSectionIds.add(s.id);
     });
-    secDiv.appendChild(cards);
+  }
+
+  // Parcourir chaque section
+  for (const section of sections) {
+    if (sectionFilter && section.id !== sectionFilter) continue;
+
+    let sectProducts = products.filter(p => p.sectionId === section.id);
+
+    // Filtrer par recherche
+    if (q) {
+      sectProducts = sectProducts.filter(p => {
+        const productText = normalizeString((p.name || '') + ' ' + (p.description || ''));
+        return productText.includes(q) || matchedSectionIds.has(section.id);
+      });
+    }
+
+    if (sectProducts.length === 0) continue;
+
+    const secDiv = document.createElement('div');
+    secDiv.setAttribute('data-section', section.id);
+    secDiv.innerHTML = `<h3 id="section-${section.id}">${section.name}</h3>`;
+
+    const sectGrid = document.createElement('div');
+    sectGrid.className = 'grid';
+
+    for (const x of sectProducts) {
+      const imgSrc = x.image ? x.image : null; // <-- ici on utilise directement le chemin uploadé
+      const c = document.createElement('article');
+      c.className = 'card';
+      c.innerHTML = `
+        <div class='thumb' data-img='${imgSrc || ''}'>
+          ${imgSrc ? `<img src='${imgSrc}'>` : '<div class="muted">Aucune image</div>'}
+        </div>
+        <div class='card-body'>
+          <div class='name'>${x.name}</div>
+          <div class='desc'>${x.description || ''}</div>
+          <div style='display:flex;justify-content:space-between;align-items:center'>
+            <div class='price'>${(x.price || 0).toLocaleString()} Fcfa</div>
+            <div class='card-actions'>
+              <a class='small btn' href='${whatsappUrl(x)}' target='_blank'>${t('order')}</a>
+              ${isAdmin() ? `<div class="admin-actions">
+                <button class="small btn secondary edit" data-id="${x.id}">Edit</button>
+                <button class="small btn secondary del" data-id="${x.id}">Suppr</button>
+              </div>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+      sectGrid.appendChild(c);
+    }
+
+    secDiv.appendChild(sectGrid);
     grid.appendChild(secDiv);
+  }
+
+  // Zoom image
+  qs('.thumb').forEach(t => t.onclick = () => {
+    const src = t.querySelector('img')?.src;
+    if (src) { $('#img-modal img').src = src; $('#img-modal').style.display = 'flex'; }
   });
+  $('#close-modal').onclick = () => $('#img-modal').style.display = 'none';
+
+  // Admin buttons
+  qs('.edit').forEach(b => b.onclick = () => startEdit(b.dataset.id));
+  qs('.del').forEach(b => b.onclick = () => handleDeleteProduct(b.dataset.id));
 }
+
 
 // Admin toggle
 $('#admin-btn').onclick = ()=>{
@@ -410,3 +467,4 @@ function buildSectionNav(sections){
 </script>
 </body>
 </html>
+
