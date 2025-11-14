@@ -111,6 +111,11 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
   padding-bottom:12px;
   border-bottom:1px solid #eaeaea;
 }
+
+/* Section nav */
+#section-nav{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 24px 0}
+#section-nav button{background:transparent;color:var(--accent);border:1px solid rgba(142,68,173,0.15);padding:8px 12px;border-radius:999px;cursor:pointer}
+#section-nav button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -132,8 +137,10 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
 </header>
 
 <main class="container">
+  <div id="section-nav"></div> <!-- Navigation entre sections -->
+
   <section class="controls">
-    <input id="search" class="search" type="search" placeholder="Rechercher un produit...">
+    <input id="search" class="search" type="search" placeholder="Rechercher un produit ou une section...">
     <select id="sort">
       <option value="">Trier</option>
       <option value="price-asc">Prix croissant</option>
@@ -196,6 +203,11 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
    CONFIG & UTILITAIRES
    ---------------------------- */
 const CONFIG={whatsapp:'+237694484568', defaultPassword:'Laure1975', shopName:"Laura Shop's"};
+const API = {
+  base: '/api',
+  sections: '/api/sections',
+  products: '/api/products'
+};
 const $=s=>document.querySelector(s), qs=s=>Array.from(document.querySelectorAll(s));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const LOCAL_PRODUCTS_KEY='shop_products', LOCAL_SECTIONS_KEY='shop_sections';
@@ -205,7 +217,7 @@ const t=k=>TEXT[LANG][k]||k;
 const normalizeString=str=>String(str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 
 /* ----------------------------
-   IndexedDB: simple helper
+   IndexedDB helper (used only for migration/fallback)
    ---------------------------- */
 const DB_NAME = "LauraShopDB";
 const DB_VERSION = 1;
@@ -214,8 +226,9 @@ const STORE_SECTIONS = "sections";
 
 function openDb(){
   return new Promise((resolve, reject)=>{
+    if(!window.indexedDB) return reject(new Error('IndexedDB non pris en charge'));
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
+    req.onupgradeneeded = () => {
       const db = req.result;
       if(!db.objectStoreNames.contains(STORE_PRODUCTS)){
         db.createObjectStore(STORE_PRODUCTS, { keyPath: 'id' });
@@ -228,119 +241,182 @@ function openDb(){
     req.onerror = ()=>reject(req.error);
   });
 }
-
 async function idbGetAll(storeName){
-  const db = await openDb();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(storeName,'readonly');
-    const store = tx.objectStore(storeName);
-    const req = store.getAll();
-    req.onsuccess = ()=>resolve(req.result || []);
-    req.onerror = ()=>reject(req.error);
-  });
+  try{
+    const db = await openDb();
+    return await new Promise((resolve,reject)=>{
+      const tx = db.transaction(storeName,'readonly');
+      const store = tx.objectStore(storeName);
+      const req = store.getAll();
+      req.onsuccess = ()=>resolve(req.result || []);
+      req.onerror = ()=>reject(req.error);
+    });
+  }catch(e){ return []; }
 }
-
-async function idbGet(storeName, key){
-  const db = await openDb();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(storeName,'readonly');
-    const store = tx.objectStore(storeName);
-    const req = store.get(key);
-    req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
-  });
-}
-
-async function idbAdd(storeName, obj){
-  const db = await openDb();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(storeName,'readwrite');
-    const store = tx.objectStore(storeName);
-    const req = store.add(obj);
-    req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
-  });
-}
-
-async function idbPut(storeName, obj){
-  const db = await openDb();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(storeName,'readwrite');
-    const store = tx.objectStore(storeName);
-    const req = store.put(obj);
-    req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
-  });
-}
-
-async function idbDelete(storeName, key){
-  const db = await openDb();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(storeName,'readwrite');
-    const store = tx.objectStore(storeName);
-    const req = store.delete(key);
-    req.onsuccess = ()=>resolve();
-    req.onerror = ()=>reject(req.error);
-  });
+async function idbClearStore(storeName){
+  try{
+    const db = await openDb();
+    return await new Promise((resolve,reject)=>{
+      const tx = db.transaction(storeName,'readwrite');
+      const store = tx.objectStore(storeName);
+      const req = store.clear();
+      req.onsuccess = ()=>resolve();
+      req.onerror = ()=>reject(req.error);
+    });
+  }catch(e){ /* ignore */ }
 }
 
 /* ----------------------------
-   Migration: localStorage -> IndexedDB
+   Server API wrapper with fallback to IndexedDB
    ---------------------------- */
-async function migrateLocalStorageToIDB(){
+async function apiGet(url){
   try{
-    const localProducts = JSON.parse(localStorage.getItem(LOCAL_PRODUCTS_KEY) || 'null');
-    const localSections = JSON.parse(localStorage.getItem(LOCAL_SECTIONS_KEY) || 'null');
-
-    // If IndexedDB already has data, avoid duplicate migration.
-    const existingProducts = await idbGetAll(STORE_PRODUCTS);
-    const existingSections = await idbGetAll(STORE_SECTIONS);
-
-    // If there is nothing in IndexedDB but there is in localStorage -> migrate
-    if((Array.isArray(localProducts) && localProducts.length) && (!existingProducts || existingProducts.length===0)){
-      for(const p of localProducts){
-        // Ensure id exists
-        const obj = {...p, id: p.id || uid()};
-        try{ await idbAdd(STORE_PRODUCTS, obj); }catch(e){ await idbPut(STORE_PRODUCTS, obj); }
-      }
-      console.log('Migrated products from localStorage → IndexedDB');
-    }
-
-    if((Array.isArray(localSections) && localSections.length) && (!existingSections || existingSections.length===0)){
-      for(const s of localSections){
-        const obj = {...s, id: s.id || uid()};
-        try{ await idbAdd(STORE_SECTIONS, obj); }catch(e){ await idbPut(STORE_SECTIONS, obj); }
-      }
-      console.log('Migrated sections from localStorage → IndexedDB');
-    }
-
-    // If migration succeeded (or at least localStorage existed), clear localStorage keys to avoid future confusion
-    if(localProducts || localSections){
-      try{
-        localStorage.removeItem(LOCAL_PRODUCTS_KEY);
-        localStorage.removeItem(LOCAL_SECTIONS_KEY);
-        console.log('Cleared old localStorage keys after migration.');
-      }catch(e){
-        console.warn('Could not clear localStorage keys:', e);
-      }
-    }
+    const r = await fetch(url, {cache:'no-store'});
+    if(!r.ok) throw new Error('fetch failed');
+    return await r.json();
   }catch(e){
-    console.warn('Migration error:', e);
+    // fallback: read from IndexedDB
+    if(url.endsWith('/sections')) return await idbGetAll(STORE_SECTIONS);
+    if(url.endsWith('/products')) return await idbGetAll(STORE_PRODUCTS);
+    return [];
+  }
+}
+async function apiPost(url, body){
+  try{
+    const r = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error('post failed');
+    return await r.json();
+  }catch(e){
+    // fallback: save to indexedDB if possible
+    try{
+      const db = await openDb();
+      const tx = db.transaction(url.includes('sections')?STORE_SECTIONS:STORE_PRODUCTS,'readwrite');
+      const store = tx.objectStore(url.includes('sections')?STORE_SECTIONS:STORE_PRODUCTS);
+      const obj = {...body, id: body.id || uid()};
+      const req = store.add(obj);
+      return await new Promise((res,rej)=>{ req.onsuccess=()=>res(obj); req.onerror=()=>{ store.put(obj); res(obj); }; });
+    }catch(err){ throw e; }
+  }
+}
+async function apiPut(url, body){
+  try{
+    const r = await fetch(url, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error('put failed');
+    return await r.json();
+  }catch(e){
+    // fallback: put into indexedDB
+    try{
+      const db = await openDb();
+      const tx = db.transaction(url.includes('sections')?STORE_SECTIONS:STORE_PRODUCTS,'readwrite');
+      const store = tx.objectStore(url.includes('sections')?STORE_SECTIONS:STORE_PRODUCTS);
+      const obj = {...body};
+      const req = store.put(obj);
+      return await new Promise((res,rej)=>{ req.onsuccess=()=>res(obj); req.onerror=()=>rej(req.error); });
+    }catch(err){ throw e; }
+  }
+}
+async function apiDelete(url){
+  try{
+    const r = await fetch(url, {method:'DELETE'});
+    if(!r.ok) throw new Error('delete failed');
+    return true;
+  }catch(e){
+    // fallback delete from indexedDB
+    const id = url.split('/').pop();
+    try{
+      const db = await openDb();
+      const tx = db.transaction(url.includes('sections')?STORE_SECTIONS:STORE_PRODUCTS,'readwrite');
+      const store = tx.objectStore(url.includes('sections')?STORE_SECTIONS:STORE_PRODUCTS);
+      const req = store.delete(id);
+      return await new Promise((res,rej)=>{ req.onsuccess=()=>res(true); req.onerror=()=>rej(req.error); });
+    }catch(err){ return false; }
   }
 }
 
 /* ----------------------------
-   Data API (using IndexedDB)
+   Migration: IndexedDB -> Server
    ---------------------------- */
-async function loadProducts(){ return await idbGetAll(STORE_PRODUCTS) || []; }
-async function saveProduct(obj){ return await idbPut(STORE_PRODUCTS, obj); }
-async function addProduct(obj){ return await idbAdd(STORE_PRODUCTS, obj); }
-async function deleteProductById(id){ return await idbDelete(STORE_PRODUCTS, id); }
+async function migrateIndexedDBToServer(){
+  try{
+    // try to fetch server lists (if server unreachable, the apiGet fallback will return idb lists)
+    // But we want to determine if server is really online. Try a lightweight request:
+    const r = await fetch(API.sections, {method:'GET', cache:'no-store'});
+    const serverOnline = r.ok;
+    if(!serverOnline){
+      console.warn('API non disponible — migration serveur abandonnée (fallback IndexedDB reste actif).');
+      return;
+    }
+    const serverSections = await r.json(); // array
+    // fetch local data to migrate
+    const localSections = await idbGetAll(STORE_SECTIONS);
+    const localProducts = await idbGetAll(STORE_PRODUCTS);
 
-async function loadSections(){ return await idbGetAll(STORE_SECTIONS) || []; }
-async function saveSection(obj){ return await idbPut(STORE_SECTIONS, obj); }
-async function addSection(obj){ return await idbAdd(STORE_SECTIONS, obj); }
-async function deleteSectionById(id){ return await idbDelete(STORE_SECTIONS, id); }
+    if((!localSections.length && !localProducts.length)) return; // nothing to migrate
+
+    // map existing server section names -> id (case-insensitive)
+    const serverMap = {};
+    serverSections.forEach(s=> serverMap[normalizeString(s.name)] = s);
+
+    // 1) migrate sections: for each local section, ensure server section exists
+    const sectionIdMap = {}; // oldLocalId -> serverId
+    for(const ls of localSections){
+      const key = normalizeString(ls.name);
+      if(serverMap[key]){
+        sectionIdMap[ls.id] = serverMap[key].id;
+      } else {
+        // create on server
+        try{
+          const created = await apiPost(API.sections, { name: ls.name });
+          sectionIdMap[ls.id] = created.id;
+          serverMap[key] = created;
+        }catch(err){
+          console.warn('Erreur création section sur serveur', err);
+        }
+      }
+    }
+
+    // 2) migrate products: for each local product, post to server with mapped sectionId (if any)
+    for(const lp of localProducts){
+      const mappedSectionId = lp.sectionId ? (sectionIdMap[lp.sectionId] || lp.sectionId) : null;
+      const payload = {
+        name: lp.name,
+        price: lp.price || 0,
+        description: lp.description || '',
+        image: lp.image || null,
+        sectionId: mappedSectionId
+      };
+      try{
+        await apiPost(API.products, payload);
+      }catch(err){
+        console.warn('Erreur création produit sur serveur', err);
+      }
+    }
+
+    // if we reach here without throwing, clear local IndexedDB stores
+    try{
+      await idbClearStore(STORE_PRODUCTS);
+      await idbClearStore(STORE_SECTIONS);
+      console.log('Migration IndexeDB → Serveur terminée et données locales supprimées.');
+    }catch(e){
+      console.warn('Migration réussie mais suppression locale échouée', e);
+    }
+  }catch(e){
+    console.warn('Migration non effectuée :', e);
+  }
+}
+
+/* ----------------------------
+   Data layer (server primary)
+   ---------------------------- */
+async function loadSections(){ return await apiGet(API.sections); }
+async function addSection(section){ return await apiPost(API.sections, section); }
+async function saveSection(section){ return await apiPut(`${API.sections}/${section.id}`, section); }
+async function deleteSectionById(id){ return await apiDelete(`${API.sections}/${id}`); }
+
+async function loadProducts(){ return await apiGet(API.products); }
+async function addProduct(product){ return await apiPost(API.products, product); }
+async function saveProduct(product){ return await apiPut(`${API.products}/${product.id}`, product); }
+async function deleteProductById(id){ return await apiDelete(`${API.products}/${id}`); }
 
 /* ----------------------------
    Admin state & helpers
@@ -355,9 +431,16 @@ let editingId=null;
 let editingSectionId=null;
 
 async function renderSections(){
+  // builds:
+  // - sections list in admin
+  // - section select used for product form
+  // - section filter select
+  // - section nav (buttons)
   const list = $('#sections-list');
   list.innerHTML = '';
   const sections = await loadSections();
+
+  // ADMIN list
   sections.forEach(s=>{
     const li = document.createElement('li');
     li.style.display='flex'; li.style.justifyContent='space-between'; li.style.alignItems='center'; li.style.marginBottom='4px';
@@ -370,14 +453,17 @@ async function renderSections(){
   });
   qs('.edit-section').forEach(b=>b.onclick=()=>startEditSection(b.dataset.id));
   qs('.del-section').forEach(b=>b.onclick=()=>handleDeleteSection(b.dataset.id));
-  updateSectionSelect();
-  renderSectionFilter();
+
+  // SELECTS & NAV: rebuild fully (avoid duplicates)
+  await updateSectionSelects(sections);
+  buildSectionNav(sections);
+  renderSectionFilter(); // uses loadSections internally
 }
 
-async function updateSectionSelect(){
+async function updateSectionSelects(sections){
+  // section-select (admin product form)
   const sel = $('#section-select');
-  sel.innerHTML = '';
-  const sections = await loadSections();
+  sel.innerHTML = '<option value="">-- Choisir une section --</option>';
   sections.forEach(s=>{
     const opt = document.createElement('option');
     opt.value = s.id; opt.textContent = s.name;
@@ -402,17 +488,19 @@ async function addOrUpdateSection(){
   const name = $('#section-input').value.trim();
   if(!name) return alert('Nom de section requis');
   if(editingSectionId){
-    const s = await idbGet(STORE_SECTIONS, editingSectionId);
-    if(s){ s.name = name; await saveSection(s); }
+    try{
+      const s = { id: editingSectionId, name };
+      await saveSection(s);
+    }catch(e){ console.warn(e); alert('Erreur mise à jour section'); }
   } else {
-    await addSection({ id: uid(), name });
+    try{ await addSection({ name }); }catch(e){ console.warn(e); alert('Erreur création section'); }
   }
   clearSectionForm();
   await renderSections();
   await renderProducts();
 }
 async function startEditSection(id){
-  const s = await idbGet(STORE_SECTIONS, id);
+  const s = (await loadSections()).find(x=>x.id===id);
   if(!s) return;
   editingSectionId = id;
   $('#section-input').value = s.name;
@@ -420,10 +508,13 @@ async function startEditSection(id){
 async function handleDeleteSection(id){
   if(!confirm('Supprimer cette section et tous ses articles ?')) return;
   // delete section and associated products
-  await deleteSectionById(id);
+  try{ await deleteSectionById(id); }catch(e){ console.warn(e); }
+  // delete products belonging to this section
   const products = await loadProducts();
   for(const p of products){
-    if(p.sectionId === id) await deleteProductById(p.id);
+    if(p.sectionId === id){
+      try{ await deleteProductById(p.id); }catch(e){ console.warn(e); }
+    }
   }
   await renderSections();
   await renderProducts();
@@ -453,21 +544,22 @@ async function addOrUpdate(){
   }
 
   if(editingId){
-    const prod = await idbGet(STORE_PRODUCTS, editingId);
-    if(prod){
-      const updated = {...prod, name:n, price:pr, description:d, image:img, sectionId:secId};
-      await saveProduct(updated);
-    }
+    try{
+      const prod = { id: editingId, name:n, price:pr, description:d, image:img, sectionId:secId };
+      await saveProduct(prod);
+    }catch(e){ console.warn(e); alert('Erreur mise à jour produit'); }
   } else {
-    const obj = { id: uid(), name:n, price:pr, description:d, image:img, sectionId:secId };
-    await addProduct(obj);
+    try{
+      const obj = { name:n, price:pr, description:d, image:img, sectionId:secId };
+      await addProduct(obj);
+    }catch(e){ console.warn(e); alert('Erreur ajout produit'); }
   }
   clearForm();
   await renderProducts();
 }
 
 async function startEdit(id){
-  const p = await idbGet(STORE_PRODUCTS, id);
+  const p = (await loadProducts()).find(x=>x.id===id);
   if(!p) return;
   editingId = id;
   $('#name-input').value = p.name || '';
@@ -475,13 +567,12 @@ async function startEdit(id){
   $('#desc-input').value = p.description || '';
   $('#section-select').value = p.sectionId || '';
   $('#preview').innerHTML = p.image ? `<img src='${p.image}'>` : '';
-  // scroll admin panel into view if on mobile
   if(window.innerWidth <= 600) $('#admin-panel').scrollIntoView({behavior:'smooth'});
 }
 
 async function handleDeleteProduct(id){
   if(!confirm('Supprimer cet article ?')) return;
-  await deleteProductById(id);
+  try{ await deleteProductById(id); }catch(e){ console.warn(e); }
   await renderProducts();
 }
 
@@ -493,6 +584,38 @@ function whatsappUrl(p){
     ?`Bonjour Mme Laure, je souhaite commander ${p.name} au prix de ${p.price.toLocaleString()} Fcfa.\nVoir le produit ici : ${productUrl}`
     :`Hello, I want to order ${p.name} for ${p.price.toLocaleString()} Fcfa.\nSee the product here: ${productUrl}`;
   return base+'?text='+encodeURIComponent(msg);
+}
+
+/* Build section nav */
+function buildSectionNav(sections){
+  const nav = $('#section-nav');
+  nav.innerHTML = '';
+  const allBtn = document.createElement('button');
+  allBtn.textContent = 'Toutes';
+  allBtn.onclick = ()=>{
+    qs('#section-nav button').forEach(b=>b.classList.remove('active'));
+    allBtn.classList.add('active');
+    $('#section-filter').value = '';
+    renderProducts();
+  };
+  allBtn.classList.add('active');
+  nav.appendChild(allBtn);
+
+  sections.forEach(s=>{
+    const b = document.createElement('button');
+    b.textContent = s.name;
+    b.onclick = ()=>{
+      qs('#section-nav button').forEach(b=>b.classList.remove('active'));
+      b.classList.add('active');
+      // set filter and render
+      $('#section-filter').value = s.id;
+      renderProducts().then(()=> {
+        const el = document.querySelector(`#products-grid [data-section="${s.id}"]`);
+        if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+      });
+    };
+    nav.appendChild(b);
+  });
 }
 
 /* Render products grouped by section */
@@ -508,14 +631,32 @@ async function renderProducts(){
   if(sortVal === 'price-asc') products.sort((a,b)=>a.price - b.price);
   else if(sortVal === 'price-desc') products.sort((a,b)=>b.price - a.price);
 
+  // Determine matched section ids based on search query (so searching a section shows all its products)
+  const matchedSectionIds = new Set();
+  if(q){
+    sections.forEach(s=>{
+      if(normalizeString(s.name).includes(q)) matchedSectionIds.add(s.id);
+    });
+  }
+
   // render per section
   for(const section of sections){
     if(sectionFilter && section.id !== sectionFilter) continue;
-    let sectProducts = products.filter(p => p.sectionId === section.id && normalizeString(p.name + ' ' + p.description).includes(q));
+    let sectProducts = products.filter(p => p.sectionId === section.id);
+
+    // apply search: include product if its name/desc contains q OR the section is matched
+    if(q){
+      sectProducts = sectProducts.filter(p => {
+        const productText = normalizeString((p.name || '') + ' ' + (p.description || ''));
+        return productText.includes(q) || matchedSectionIds.has(section.id);
+      });
+    }
+
     if(sectProducts.length === 0) continue;
 
     const secDiv = document.createElement('div');
-    secDiv.innerHTML = `<h3>${section.name}</h3>`;
+    secDiv.setAttribute('data-section', section.id);
+    secDiv.innerHTML = `<h3 id="section-${section.id}">${section.name}</h3>`;
     const sectGrid = document.createElement('div'); sectGrid.className = 'grid';
 
     for(const x of sectProducts){
@@ -569,8 +710,6 @@ function updateAdminUI(){
   // re-render controls that depend on admin
   renderSections();
   renderProducts();
-  updateSectionSelect();
-  renderSectionFilter();
 }
 
 /* ----------------------------
@@ -578,12 +717,12 @@ function updateAdminUI(){
    ---------------------------- */
 document.addEventListener('DOMContentLoaded', async ()=>{
   $('#year').textContent = new Date().getFullYear();
-  // open DB to ensure it's available and migrate
+
+  // Attempt migration from local IndexedDB to server if server available
   try{
-    await openDb();
-    await migrateLocalStorageToIDB();
+    await migrateIndexedDBToServer();
   }catch(e){
-    console.warn('IndexedDB not available or failed to open:', e);
+    console.warn('Migration failed', e);
   }
 
   // initial UI populate
@@ -592,7 +731,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   updateAdminUI();
 
   // Admin login
-  $('#admin-btn').onclick = ()=>{
+  $('#admin-btn').onclick = ()=> {
     const pw = prompt("Réservé à l'administrateur");
     if(pw === CONFIG.defaultPassword) setAdmin(true);
     else alert('Mot de passe incorrect');
@@ -632,20 +771,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // Ensure admin UI visible if session already admin
   if(isAdmin()) updateAdminUI();
 });
-
-/* ----------------------------
-   Small utility: get a single record (used earlier)
-   ---------------------------- */
-async function idbGet(storeName, key){
-  const db = await openDb();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(storeName,'readonly');
-    const store = tx.objectStore(storeName);
-    const req = store.get(key);
-    req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
-  });
-}
 </script>
 </body>
 </html>
