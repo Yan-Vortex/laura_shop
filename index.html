@@ -75,7 +75,6 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
   .admin-actions .small{padding:10px 12px;font-size:15px;border-radius:12px}
   .card .admin-actions{position:absolute;right:10px;bottom:12px;flex-direction:row-reverse;background:linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.85));padding:6px;border-radius:999px;box-shadow:var(--shadow)}
   .card .admin-actions .small{box-shadow:none}
-  /* add a subtle touch target area */
   .card{padding-bottom:18px}
 }
 
@@ -203,10 +202,10 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
    CONFIG & UTILITAIRES
    ---------------------------- */
 const CONFIG={whatsapp:'+237694484568', defaultPassword:'Laure1975', shopName:"Laura Shop's"};
+const API_BASE = 'https://laura-api-ok7h.onrender.com';
 const API = {
-  base: '/api',
-  sections: '/api/sections',
-  products: '/api/products'
+  sections: API_BASE + '/sections',
+  products: API_BASE + '/products'
 };
 const $=s=>document.querySelector(s), qs=s=>Array.from(document.querySelectorAll(s));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -287,7 +286,6 @@ async function apiPost(url, body){
     if(!r.ok) throw new Error('post failed');
     return await r.json();
   }catch(e){
-    // fallback: save to indexedDB if possible
     try{
       const db = await openDb();
       const tx = db.transaction(url.includes('sections')?STORE_SECTIONS:STORE_PRODUCTS,'readwrite');
@@ -304,7 +302,6 @@ async function apiPut(url, body){
     if(!r.ok) throw new Error('put failed');
     return await r.json();
   }catch(e){
-    // fallback: put into indexedDB
     try{
       const db = await openDb();
       const tx = db.transaction(url.includes('sections')?STORE_SECTIONS:STORE_PRODUCTS,'readwrite');
@@ -321,7 +318,6 @@ async function apiDelete(url){
     if(!r.ok) throw new Error('delete failed');
     return true;
   }catch(e){
-    // fallback delete from indexedDB
     const id = url.split('/').pop();
     try{
       const db = await openDb();
@@ -338,245 +334,57 @@ async function apiDelete(url){
    ---------------------------- */
 async function migrateIndexedDBToServer(){
   try{
-    // try to fetch server lists (if server unreachable, the apiGet fallback will return idb lists)
-    // But we want to determine if server is really online. Try a lightweight request:
     const r = await fetch(API.sections, {method:'GET', cache:'no-store'});
     const serverOnline = r.ok;
     if(!serverOnline){
-      console.warn('API non disponible — migration serveur abandonnée (fallback IndexedDB reste actif).');
+      console.warn('API non disponible — migration serveur abandonnée.');
       return;
     }
-    const serverSections = await r.json(); // array
-    // fetch local data to migrate
+    const serverSections = await r.json();
     const localSections = await idbGetAll(STORE_SECTIONS);
     const localProducts = await idbGetAll(STORE_PRODUCTS);
+    if(!localSections.length && !localProducts.length) return;
 
-    if((!localSections.length && !localProducts.length)) return; // nothing to migrate
-
-    // map existing server section names -> id (case-insensitive)
     const serverMap = {};
     serverSections.forEach(s=> serverMap[normalizeString(s.name)] = s);
 
-    // 1) migrate sections: for each local section, ensure server section exists
-    const sectionIdMap = {}; // oldLocalId -> serverId
+    const sectionIdMap = {};
     for(const ls of localSections){
       const key = normalizeString(ls.name);
       if(serverMap[key]){
         sectionIdMap[ls.id] = serverMap[key].id;
       } else {
-        // create on server
-        try{
-          const created = await apiPost(API.sections, { name: ls.name });
-          sectionIdMap[ls.id] = created.id;
-          serverMap[key] = created;
-        }catch(err){
-          console.warn('Erreur création section sur serveur', err);
-        }
+        const res = await apiPost(API.sections, ls);
+        sectionIdMap[ls.id] = res.id;
       }
     }
 
-    // 2) migrate products: for each local product, post to server with mapped sectionId (if any)
     for(const lp of localProducts){
-      const mappedSectionId = lp.sectionId ? (sectionIdMap[lp.sectionId] || lp.sectionId) : null;
-      const payload = {
-        name: lp.name,
-        price: lp.price || 0,
-        description: lp.description || '',
-        image: lp.image || null,
-        sectionId: mappedSectionId
-      };
-      try{
-        await apiPost(API.products, payload);
-      }catch(err){
-        console.warn('Erreur création produit sur serveur', err);
-      }
+      const pid = {...lp, sectionId: sectionIdMap[lp.sectionId]||lp.sectionId};
+      await apiPost(API.products, pid);
     }
 
-    // if we reach here without throwing, clear local IndexedDB stores
-    try{
-      await idbClearStore(STORE_PRODUCTS);
-      await idbClearStore(STORE_SECTIONS);
-      console.log('Migration IndexeDB → Serveur terminée et données locales supprimées.');
-    }catch(e){
-      console.warn('Migration réussie mais suppression locale échouée', e);
-    }
-  }catch(e){
-    console.warn('Migration non effectuée :', e);
-  }
+    await idbClearStore(STORE_PRODUCTS);
+    await idbClearStore(STORE_SECTIONS);
+    console.log('Migration vers serveur terminée.');
+  }catch(e){ console.warn('Migration échouée', e); }
 }
 
 /* ----------------------------
-   Data layer (server primary)
+   Loaders
    ---------------------------- */
 async function loadSections(){ return await apiGet(API.sections); }
-async function addSection(section){ return await apiPost(API.sections, section); }
-async function saveSection(section){ return await apiPut(`${API.sections}/${section.id}`, section); }
-async function deleteSectionById(id){ return await apiDelete(`${API.sections}/${id}`); }
-
 async function loadProducts(){ return await apiGet(API.products); }
-async function addProduct(product){ return await apiPost(API.products, product); }
-async function saveProduct(product){ return await apiPut(`${API.products}/${product.id}`, product); }
-async function deleteProductById(id){ return await apiDelete(`${API.products}/${id}`); }
 
 /* ----------------------------
-   Admin state & helpers
+   Admin session
    ---------------------------- */
-function isAdmin(){return sessionStorage.getItem('admin')==='1'}
-function setAdmin(v){sessionStorage.setItem('admin',v?'1':'0'); updateAdminUI();}
+function setAdmin(val){ sessionStorage.setItem('isAdmin', val?'1':'0'); updateAdminUI(); }
+function isAdmin(){ return sessionStorage.getItem('isAdmin')==='1'; }
 
 /* ----------------------------
-   Rendering & business logic
+   WhatsApp order link
    ---------------------------- */
-let editingId=null;
-let editingSectionId=null;
-
-async function renderSections(){
-  // builds:
-  // - sections list in admin
-  // - section select used for product form
-  // - section filter select
-  // - section nav (buttons)
-  const list = $('#sections-list');
-  list.innerHTML = '';
-  const sections = await loadSections();
-
-  // ADMIN list
-  sections.forEach(s=>{
-    const li = document.createElement('li');
-    li.style.display='flex'; li.style.justifyContent='space-between'; li.style.alignItems='center'; li.style.marginBottom='4px';
-    li.innerHTML = `<span>${s.name}</span>
-                    <span>
-                      <button class="small btn secondary edit-section" data-id="${s.id}">Edit</button>
-                      <button class="small btn secondary del-section" data-id="${s.id}">Suppr</button>
-                    </span>`;
-    list.appendChild(li);
-  });
-  qs('.edit-section').forEach(b=>b.onclick=()=>startEditSection(b.dataset.id));
-  qs('.del-section').forEach(b=>b.onclick=()=>handleDeleteSection(b.dataset.id));
-
-  // SELECTS & NAV: rebuild fully (avoid duplicates)
-  await updateSectionSelects(sections);
-  buildSectionNav(sections);
-  renderSectionFilter(); // uses loadSections internally
-}
-
-async function updateSectionSelects(sections){
-  // section-select (admin product form)
-  const sel = $('#section-select');
-  sel.innerHTML = '<option value="">-- Choisir une section --</option>';
-  sections.forEach(s=>{
-    const opt = document.createElement('option');
-    opt.value = s.id; opt.textContent = s.name;
-    sel.appendChild(opt);
-  });
-}
-
-async function renderSectionFilter(){
-  const sel = $('#section-filter');
-  sel.innerHTML = '<option value="">Toutes les sections</option>';
-  const sections = await loadSections();
-  sections.forEach(s=>{
-    const opt = document.createElement('option');
-    opt.value = s.id; opt.textContent = s.name;
-    sel.appendChild(opt);
-  });
-}
-
-/* Sections management */
-function clearSectionForm(){ editingSectionId=null; $('#section-input').value=''; }
-async function addOrUpdateSection(){
-  const name = $('#section-input').value.trim();
-  if(!name) return alert('Nom de section requis');
-  if(editingSectionId){
-    try{
-      const s = { id: editingSectionId, name };
-      await saveSection(s);
-    }catch(e){ console.warn(e); alert('Erreur mise à jour section'); }
-  } else {
-    try{ await addSection({ name }); }catch(e){ console.warn(e); alert('Erreur création section'); }
-  }
-  clearSectionForm();
-  await renderSections();
-  await renderProducts();
-}
-async function startEditSection(id){
-  const s = (await loadSections()).find(x=>x.id===id);
-  if(!s) return;
-  editingSectionId = id;
-  $('#section-input').value = s.name;
-}
-async function handleDeleteSection(id){
-  if(!confirm('Supprimer cette section et tous ses articles ?')) return;
-  // delete section and associated products
-  try{ await deleteSectionById(id); }catch(e){ console.warn(e); }
-  // delete products belonging to this section
-  const products = await loadProducts();
-  for(const p of products){
-    if(p.sectionId === id){
-      try{ await deleteProductById(p.id); }catch(e){ console.warn(e); }
-    }
-  }
-  await renderSections();
-  await renderProducts();
-}
-
-/* Products */
-function clearForm(){ editingId=null; $('#name-input').value=''; $('#price-input').value=''; $('#desc-input').value=''; $('#file').value=''; $('#preview').innerHTML=''; $('#section-select').value=''; }
-async function addOrUpdate(){
-  const n = $('#name-input').value.trim();
-  const pr = parseFloat($('#price-input').value) || 0;
-  const d = $('#desc-input').value.trim();
-  const secId = $('#section-select').value;
-  if(!n) return alert('Nom requis');
-  if(!secId) return alert('Section requise');
-
-  let img = null;
-  const f = $('#file').files[0];
-  if(f){
-    img = await new Promise(r=>{
-      const rd = new FileReader();
-      rd.onload = ()=>r(rd.result);
-      rd.readAsDataURL(f);
-    });
-  } else {
-    const existingImg = $('#preview img');
-    if(existingImg) img = existingImg.src;
-  }
-
-  if(editingId){
-    try{
-      const prod = { id: editingId, name:n, price:pr, description:d, image:img, sectionId:secId };
-      await saveProduct(prod);
-    }catch(e){ console.warn(e); alert('Erreur mise à jour produit'); }
-  } else {
-    try{
-      const obj = { name:n, price:pr, description:d, image:img, sectionId:secId };
-      await addProduct(obj);
-    }catch(e){ console.warn(e); alert('Erreur ajout produit'); }
-  }
-  clearForm();
-  await renderProducts();
-}
-
-async function startEdit(id){
-  const p = (await loadProducts()).find(x=>x.id===id);
-  if(!p) return;
-  editingId = id;
-  $('#name-input').value = p.name || '';
-  $('#price-input').value = p.price || '';
-  $('#desc-input').value = p.description || '';
-  $('#section-select').value = p.sectionId || '';
-  $('#preview').innerHTML = p.image ? `<img src='${p.image}'>` : '';
-  if(window.innerWidth <= 600) $('#admin-panel').scrollIntoView({behavior:'smooth'});
-}
-
-async function handleDeleteProduct(id){
-  if(!confirm('Supprimer cet article ?')) return;
-  try{ await deleteProductById(id); }catch(e){ console.warn(e); }
-  await renderProducts();
-}
-
-/* WhatsApp helper */
 function whatsappUrl(p){
   const base='https://wa.me/'+CONFIG.whatsapp.replace(/\D/g,'');
   const productUrl=`${window.location.origin}${window.location.pathname}#product-${encodeURIComponent(p.name.toLowerCase().replace(/\s+/g,'-'))}`;
@@ -586,30 +394,32 @@ function whatsappUrl(p){
   return base+'?text='+encodeURIComponent(msg);
 }
 
-/* Build section nav */
+/* ----------------------------
+   Section navigation
+   ---------------------------- */
+async function renderSections(){
+  const sections = await loadSections();
+  buildSectionNav(sections);
+  const select = $('#section-select'); select.innerHTML = '';
+  sections.forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.textContent=s.name; select.appendChild(o); });
+  const filterSelect = $('#section-filter'); filterSelect.innerHTML = '<option value="">Toutes les sections</option>'; sections.forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.textContent=s.name; filterSelect.appendChild(o); });
+}
+
 function buildSectionNav(sections){
   const nav = $('#section-nav');
   nav.innerHTML = '';
   const allBtn = document.createElement('button');
   allBtn.textContent = 'Toutes';
-  allBtn.onclick = ()=>{
-    qs('#section-nav button').forEach(b=>b.classList.remove('active'));
-    allBtn.classList.add('active');
-    $('#section-filter').value = '';
-    renderProducts();
-  };
   allBtn.classList.add('active');
+  allBtn.onclick = ()=>{ qs('#section-nav button').forEach(b=>b.classList.remove('active')); allBtn.classList.add('active'); $('#section-filter').value=''; renderProducts(); };
   nav.appendChild(allBtn);
 
   sections.forEach(s=>{
-    const b = document.createElement('button');
-    b.textContent = s.name;
-    b.onclick = ()=>{
-      qs('#section-nav button').forEach(b=>b.classList.remove('active'));
-      b.classList.add('active');
-      // set filter and render
-      $('#section-filter').value = s.id;
-      renderProducts().then(()=> {
+    const b=document.createElement('button');
+    b.textContent=s.name;
+    b.onclick=()=>{
+      qs('#section-nav button').forEach(b=>b.classList.remove('active')); b.classList.add('active');
+      $('#section-filter').value=s.id; renderProducts().then(()=>{
         const el = document.querySelector(`#products-grid [data-section="${s.id}"]`);
         if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
       });
@@ -618,158 +428,87 @@ function buildSectionNav(sections){
   });
 }
 
-/* Render products grouped by section */
+/* ----------------------------
+   Products rendering
+   ---------------------------- */
 async function renderProducts(){
-  const grid = $('#products-grid');
-  grid.innerHTML = '';
+  const grid = $('#products-grid'); grid.innerHTML='';
   let products = await loadProducts();
   const sections = await loadSections();
   const q = normalizeString($('#search').value.trim());
   const sectionFilter = $('#section-filter').value;
   const sortVal = $('#sort').value;
+  if(sortVal==='price-asc') products.sort((a,b)=>a.price-b.price);
+  else if(sortVal==='price-desc') products.sort((a,b)=>b.price-a.price);
 
-  if(sortVal === 'price-asc') products.sort((a,b)=>a.price - b.price);
-  else if(sortVal === 'price-desc') products.sort((a,b)=>b.price - a.price);
-
-  // Determine matched section ids based on search query (so searching a section shows all its products)
   const matchedSectionIds = new Set();
-  if(q){
-    sections.forEach(s=>{
-      if(normalizeString(s.name).includes(q)) matchedSectionIds.add(s.id);
-    });
-  }
+  if(q) sections.forEach(s=>{ if(normalizeString(s.name).includes(q)) matchedSectionIds.add(s.id); });
 
-  // render per section
   for(const section of sections){
-    if(sectionFilter && section.id !== sectionFilter) continue;
-    let sectProducts = products.filter(p => p.sectionId === section.id);
+    if(sectionFilter && section.id!==sectionFilter) continue;
+    let sectProducts = products.filter(p=>p.sectionId===section.id);
+    if(q) sectProducts = sectProducts.filter(p=> (normalizeString((p.name||'')+' '+(p.description||'')).includes(q) || matchedSectionIds.has(section.id)));
+    if(!sectProducts.length) continue;
 
-    // apply search: include product if its name/desc contains q OR the section is matched
-    if(q){
-      sectProducts = sectProducts.filter(p => {
-        const productText = normalizeString((p.name || '') + ' ' + (p.description || ''));
-        return productText.includes(q) || matchedSectionIds.has(section.id);
-      });
-    }
+    const secDiv=document.createElement('div'); secDiv.setAttribute('data-section',section.id);
+    secDiv.innerHTML=`<h3 id="section-${section.id}">${section.name}</h3>`;
+    const sectGrid=document.createElement('div'); sectGrid.className='grid';
 
-    if(sectProducts.length === 0) continue;
-
-    const secDiv = document.createElement('div');
-    secDiv.setAttribute('data-section', section.id);
-    secDiv.innerHTML = `<h3 id="section-${section.id}">${section.name}</h3>`;
-    const sectGrid = document.createElement('div'); sectGrid.className = 'grid';
-
-    for(const x of sectProducts){
-      const c = document.createElement('article'); c.className = 'card';
-      c.innerHTML = `<div class='thumb' data-img='${x.image || ''}'>${x.image ? `<img src='${x.image}'>` : '<div class="muted">Aucune image</div>'}</div>
-      <div class='card-body'>
-        <div class='name'>${x.name}</div>
-        <div class='desc'>${x.description || ''}</div>
-        <div style='display:flex;justify-content:space-between;align-items:center'>
-          <div class='price'>${(x.price || 0).toLocaleString()} Fcfa</div>
-          <div class='card-actions'>
-            <a class='small btn' href='${whatsappUrl(x)}' target='_blank'>${t('order')}</a>
-            ${isAdmin() ? `<div class="admin-actions">
-              <button class="small btn secondary edit" data-id="${x.id}">Edit</button>
-              <button class="small btn secondary del" data-id="${x.id}">Suppr</button>
-            </div>` : ''}
+    sectProducts.forEach(x=>{
+      const c=document.createElement('article'); c.className='card';
+      c.innerHTML=`<div class='thumb' data-img='${x.image||''}'>${x.image?`<img src='${x.image}'>`:'<div class="muted">Aucune image</div>'}</div>
+        <div class='card-body'>
+          <div class='name'>${x.name}</div>
+          <div class='desc'>${x.description||''}</div>
+          <div style='display:flex;justify-content:space-between;align-items:center'>
+            <div class='price'>${(x.price||0).toLocaleString()} Fcfa</div>
+            <div class='card-actions'>
+              <a class='small btn' href='${whatsappUrl(x)}' target='_blank'>${t('order')}</a>
+              ${isAdmin()?`<div class="admin-actions">
+                <button class="small btn secondary edit" data-id="${x.id}">Edit</button>
+                <button class="small btn secondary del" data-id="${x.id}">Suppr</button>
+              </div>`:''}
+            </div>
           </div>
-        </div>
-      </div>`;
+        </div>`;
       sectGrid.appendChild(c);
-    }
-
-    secDiv.appendChild(sectGrid);
-    grid.appendChild(secDiv);
+    });
+    secDiv.appendChild(sectGrid); grid.appendChild(secDiv);
   }
 
-  // Image zoom (delegate)
-  qs('.thumb').forEach(t=>t.onclick=()=>{
-    const src = t.querySelector('img')?.src;
-    if(src){ $('#img-modal img').src = src; $('#img-modal').style.display = 'flex'; }
-  });
-  $('#close-modal').onclick = ()=>$('#img-modal').style.display = 'none';
-
-  // admin buttons
+  qs('.thumb').forEach(t=>t.onclick=()=>{ const src=t.querySelector('img')?.src; if(src){ $('#img-modal img').src=src; $('#img-modal').style.display='flex'; } });
+  $('#close-modal').onclick=()=>$('#img-modal').style.display='none';
   qs('.edit').forEach(b=>b.onclick=()=>startEdit(b.dataset.id));
   qs('.del').forEach(b=>b.onclick=()=>handleDeleteProduct(b.dataset.id));
 }
 
 /* ----------------------------
-   Admin UI update & events
+   Admin UI
    ---------------------------- */
 function updateAdminUI(){
   const panel = $('#admin-panel');
-  if(isAdmin()){
-    panel.classList.add('show');
-    $('#admin-btn').style.display='none';
-  } else {
-    panel.classList.remove('show');
-    $('#admin-btn').style.display='inline-block';
-  }
-  // re-render controls that depend on admin
-  renderSections();
-  renderProducts();
+  if(isAdmin()){ panel.classList.add('show'); $('#admin-btn').style.display='none'; } 
+  else{ panel.classList.remove('show'); $('#admin-btn').style.display='inline-block'; }
+  renderSections(); renderProducts();
 }
 
 /* ----------------------------
-   Event bindings & init
+   Event bindings
    ---------------------------- */
 document.addEventListener('DOMContentLoaded', async ()=>{
-  $('#year').textContent = new Date().getFullYear();
-
-  // Attempt migration from local IndexedDB to server if server available
-  try{
-    await migrateIndexedDBToServer();
-  }catch(e){
-    console.warn('Migration failed', e);
-  }
-
-  // initial UI populate
-  await renderSections();
-  await renderProducts();
+  $('#year').textContent=new Date().getFullYear();
+  await migrateIndexedDBToServer();
+  await renderSections(); await renderProducts();
   updateAdminUI();
 
-  // Admin login
-  $('#admin-btn').onclick = ()=> {
-    const pw = prompt("Réservé à l'administrateur");
-    if(pw === CONFIG.defaultPassword) setAdmin(true);
-    else alert('Mot de passe incorrect');
-  };
-  $('#logout').onclick = ()=>{ setAdmin(false); };
+  $('#admin-btn').onclick=()=>{ const pw=prompt("Réservé à l'administrateur"); if(pw===CONFIG.defaultPassword) setAdmin(true); else alert('Mot de passe incorrect'); };
+  $('#logout').onclick=()=>{ setAdmin(false); };
+  $('#search').oninput=renderProducts; $('#sort').onchange=renderProducts; $('#section-filter').onchange=renderProducts;
 
-  // Buttons
-  $('#add-btn').onclick = addOrUpdate;
-  $('#cancel-edit').onclick = clearForm;
-  $('#add-section-btn').onclick = addOrUpdateSection;
-  $('#clear-section-btn').onclick = clearSectionForm;
-  $('#search').oninput = renderProducts;
-  $('#sort').onchange = renderProducts;
-  $('#section-filter').onchange = renderProducts;
-
-  // Admin panel toggle
-  let minimized = false;
-  $('#admin-toggle').onclick = ()=>{
-    const content = $('#admin-content');
-    minimized = !minimized;
-    content.style.display = minimized ? 'none' : 'block';
-    $('#admin-toggle').textContent = minimized ? '+' : '–';
-  };
-
-  // File preview
-  $('#file').onchange = e=>{
-    const f = e.target.files[0]; if(!f) return;
-    const reader = new FileReader();
-    reader.onload = ()=>$('#preview').innerHTML = `<img src='${reader.result}'>`;
-    reader.readAsDataURL(f);
-  };
-
-  // Language toggle
-  $('#lang-fr').onclick = ()=>{ LANG='fr'; renderProducts(); };
-  $('#lang-en').onclick = ()=>{ LANG='en'; renderProducts(); };
-
-  // Ensure admin UI visible if session already admin
-  if(isAdmin()) updateAdminUI();
+  let minimized=false;
+  $('#admin-toggle').onclick=()=>{ const content=$('#admin-content'); minimized=!minimized; content.style.display=minimized?'none':'block'; $('#admin-toggle').textContent=minimized?'+':'–'; };
+  $('#lang-fr').onclick=()=>{ LANG='fr'; renderProducts(); };
+  $('#lang-en').onclick=()=>{ LANG='en'; renderProducts(); };
 });
 </script>
 </body>
