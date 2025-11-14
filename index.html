@@ -5,437 +5,777 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Laura Shop's — Catalogue</title>
 <style>
-/* [Vos styles CSS restent identiques] */
+:root{
+  --bg:#f6f7fb;
+  --card:#ffffff;
+  --accent:#8e44ad;
+  --muted:#666;
+  --glass: rgba(255,255,255,0.6);
+  --radius:12px;
+  --shadow:0 6px 18px rgba(19,24,33,0.08);
+}
+*{box-sizing:border-box;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+body{margin:0;background:linear-gradient(180deg,#f7fbfb 0%,var(--bg) 100%);color:#111}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;background:transparent}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#a569bd);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+.title{font-size:18px;font-weight:700}
+nav{display:flex;gap:10px;align-items:center}
+button, .btn{background:var(--accent);color:#fff;border:0;padding:10px 14px;border-radius:10px;cursor:pointer;box-shadow:var(--shadow)}
+.btn.secondary{background:#fff;color:var(--accent);border:1px solid #e6e6e6}
+
+.container{max-width:1100px;margin:26px auto;padding:0 18px}
+.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.search{flex:1;min-width:160px}
+input[type=text], input[type=search], textarea, select{width:100%;padding:10px;border-radius:10px;border:1px solid #e7e7e7}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.thumb{height:160px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.thumb img{max-width:100%;max-height:100%;object-fit:contain}
+.card-body{padding:12px;display:flex;flex-direction:column;gap:8px}
+.name{font-weight:700}
+.desc{color:var(--muted);font-size:13px;min-height:36px}
+.price{font-weight:800;font-size:16px}
+.card-actions{display:flex;gap:8px;align-items:center}
+.small{padding:8px 10px;border-radius:10px;font-size:13px}
+
+footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
+
+.admin-panel{position:fixed;right:18px;bottom:18px;background:var(--card);border-radius:14px;padding:12px;box-shadow:var(--shadow);width:340px;max-width:calc(100% - 36px);display:none;z-index:60;transition:all 0.3s ease;overflow:hidden;}
+.admin-panel.show{display:block}
+.admin-panel h3{margin:0 0 8px 0;position:relative;padding-right:32px;}
+.admin-panel h3 button{position:absolute;top:0;right:0;width:28px;height:28px;background:var(--accent);border:none;border-radius:50%;color:#fff;cursor:pointer;font-weight:bold;font-size:18px;display:flex;align-items:center;justify-content:center;}
+.thumb-preview{width:84px;height:84px;border-radius:10px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:8px}
+
+@media (max-width:600px){.thumb{height:140px}.grid{grid-template-columns:repeat(2,1fr);}}
+
+@media (min-width:601px) and (max-width:900px){.grid{grid-template-columns:repeat(3,1fr);} }
+@media (min-width:901px){.grid{grid-template-columns:repeat(4,1fr);} }
+
+.lang-toggle{display:flex;gap:6px}
+.chip{background:var(--glass);padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,0.04);cursor:pointer}
+
+.notice{padding:10px;border-radius:10px;background:#fff;border:1px solid #eee;margin-bottom:12px}
+.muted{color:var(--muted)}
+
+#img-modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.8);align-items:center;justify-content:center}
+#img-modal img{max-width:90%;max-height:90%;border-radius:12px;box-shadow:0 0 20px #000}
+#img-modal span{position:absolute;top:20px;right:30px;color:#fff;font-size:32px;cursor:pointer;font-weight:bold}
+
+.admin-actions{display:flex;gap:6px;align-items:center}
+.admin-actions .small{padding:6px 8px;border-radius:10px;font-size:13px}
+
+@media (max-width:600px){
+  .admin-actions .small{padding:10px 12px;font-size:15px;border-radius:12px}
+  .card .admin-actions{position:absolute;right:10px;bottom:12px;flex-direction:row-reverse;background:linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.85));padding:6px;border-radius:999px;box-shadow:var(--shadow)}
+  .card .admin-actions .small{box-shadow:none}
+  .card{padding-bottom:18px}
+}
+
+@media (min-width:601px){
+  .card .admin-actions{position:static;padding:0;background:transparent}
+}
+
+#products-grid > div > h3{
+  margin:16px 0 12px 0;
+  font-size:20px;
+  font-weight:700;
+  color:var(--accent);
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom:6px;
+  position:relative;
+}
+#products-grid > div > h3::after{
+  content:'';
+  position:absolute;
+  left:0; bottom:-2px;
+  width:50px;
+  height:4px;
+  background:var(--accent);
+  border-radius:2px;
+}
+
+#products-grid > div{
+  margin-bottom:28px;
+  padding-bottom:12px;
+  border-bottom:1px solid #eaeaea;
+}
+
+#section-nav{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 24px 0}
+#section-nav button{background:transparent;color:var(--accent);border:1px solid rgba(142,68,173,0.15);padding:8px 12px;border-radius:999px;cursor:pointer}
+#section-nav button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 </head>
 <body>
-<!-- [Votre HTML reste identique] -->
+<header>
+  <div class="brand">
+    <div class="logo">LS</div>
+    <div>
+      <div class="title" id="shop-name">Laura Shop's</div>
+      <div class="muted" id="shop-sub">Revendeur — produits sélectionnés</div>
+    </div>
+  </div>
+  <nav>
+    <div class="lang-toggle">
+      <div class="chip" id="lang-fr">FR</div>
+      <div class="chip" id="lang-en">EN</div>
+    </div>
+    <button id="admin-btn" class="btn secondary">Admin</button>
+  </nav>
+</header>
+
+<main class="container">
+  <div id="section-nav"></div>
+  <section class="controls">
+    <input id="search" class="search" type="search" placeholder="Rechercher un produit ou une section...">
+    <select id="sort">
+      <option value="">Trier</option>
+      <option value="price-asc">Prix croissant</option>
+      <option value="price-desc">Prix décroissant</option>
+    </select>
+    <select id="section-filter">
+      <option value="">Toutes les sections</option>
+    </select>
+  </section>
+  <section id="catalogue">
+    <div id="products-grid"></div>
+  </section>
+</main>
+
+<div id="img-modal">
+  <span id="close-modal">&times;</span>
+  <img src="" alt="Produit">
+</div>
+
+<div class="admin-panel" id="admin-panel">
+  <h3 id="admin-title">Espace administrateur
+    <button id="admin-toggle">–</button>
+  </h3>
+  <div class="notice" id="admin-info">Connecté en tant qu'administrateur</div>
+
+  <div id="admin-content">
+    <h4>Produits</h4>
+    <input id="name-input" placeholder="Nom du produit">
+    <input id="price-input" placeholder="Prix (Fcfa)" inputmode="numeric">
+    <textarea id="desc-input" placeholder="Description" rows="2"></textarea>
+    <select id="section-select"></select>
+    <div class="thumb-preview" id="preview"></div>
+    <input id="file" type="file" accept="image/*">
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="add-btn" class="btn">Ajouter / Modifier</button>
+      <button id="cancel-edit" class="btn secondary small">Annuler</button>
+    </div>
+    <div style="margin-top:16px">
+      <h4>Sections</h4>
+      <input id="section-input" placeholder="Nom de la section">
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button id="add-section-btn" class="btn small">Ajouter / Modifier</button>
+        <button id="clear-section-btn" class="btn secondary small">Annuler</button>
+      </div>
+      <ul id="sections-list" style="margin-top:8px;list-style:none;padding:0;"></ul>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px">
+      <button id="logout" class="btn secondary small">Se déconnecter</button>
+      <div class="muted" style="font-size:13px">Mot de passe admin : <strong id="pw-display">Laure1975</strong></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div id="footer-line">© <span id="year"></span> Laura Shop's — Commander via WhatsApp</div>
+</footer>
 
 <script>
-/* ----------------------------
-   CONFIG & UTILITAIRES
-   ---------------------------- */
-const CONFIG={whatsapp:'+237694484568', defaultPassword:'Laure1975', shopName:"Laura Shop's"};
+// Configuration
+const CONFIG = {
+  whatsapp: '+237694484568', 
+  defaultPassword: 'Laure1975', 
+  shopName: "Laura Shop's"
+};
+
+// API endpoints
 const API = {
   base: 'https://api-fugh.onrender.com',
   sections: 'https://api-fugh.onrender.com/sections',
   products: 'https://api-fugh.onrender.com/products'
 };
-const $=s=>document.querySelector(s), qs=s=>Array.from(document.querySelectorAll(s));
-const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
-let LANG='fr';
-const TEXT={fr:{order:'Commander sur WhatsApp',admin:'Espace administrateur'},en:{order:'Order on WhatsApp',admin:'Admin Area'}};
-const t=k=>TEXT[LANG][k]||k;
-const normalizeString=str=>String(str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 
-/* ----------------------------
-   Server API wrapper
-   ---------------------------- */
-async function apiGet(url){
-  try{
-    const r = await fetch(url, {cache:'no-store'});
-    if(!r.ok) throw new Error('fetch failed');
+// Utilitaires
+const $ = s => document.querySelector(s);
+const qs = s => Array.from(document.querySelectorAll(s));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// Internationalisation
+let LANG = 'fr';
+const TEXT = {
+  fr: { order: 'Commander sur WhatsApp', admin: 'Espace administrateur' },
+  en: { order: 'Order on WhatsApp', admin: 'Admin Area' }
+};
+const t = k => TEXT[LANG][k] || k;
+
+// Fonction de normalisation pour la recherche
+const normalizeString = str => String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// Fonctions API
+async function apiGet(url) {
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('fetch failed');
     return await r.json();
-  }catch(e){
-    console.error('API error:', e);
+  } catch (e) {
+    console.error('API GET error:', e);
     return [];
   }
 }
 
-async function apiPost(url, body){
-  try{
-    const r = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(!r.ok) throw new Error('post failed');
+async function apiPost(url, body) {
+  try {
+    const r = await fetch(url, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(body) 
+    });
+    if (!r.ok) throw new Error('post failed');
     return await r.json();
-  }catch(e){
-    console.error('API error:', e);
+  } catch (e) {
+    console.error('API POST error:', e);
     throw e;
   }
 }
 
-async function apiPut(url, body){
-  try{
-    const r = await fetch(url, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(!r.ok) throw new Error('put failed');
+async function apiPut(url, body) {
+  try {
+    const r = await fetch(url, { 
+      method: 'PUT', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(body) 
+    });
+    if (!r.ok) throw new Error('put failed');
     return await r.json();
-  }catch(e){
-    console.error('API error:', e);
+  } catch (e) {
+    console.error('API PUT error:', e);
     throw e;
   }
 }
 
-async function apiDelete(url){
-  try{
-    const r = await fetch(url, {method:'DELETE'});
-    if(!r.ok) throw new Error('delete failed');
+async function apiDelete(url) {
+  try {
+    const r = await fetch(url, { method: 'DELETE' });
+    if (!r.ok) throw new Error('delete failed');
     return true;
-  }catch(e){
-    console.error('API error:', e);
+  } catch (e) {
+    console.error('API DELETE error:', e);
     return false;
   }
 }
 
-/* ----------------------------
-   Data layer (server primary)
-   ---------------------------- */
-async function loadSections(){ return await apiGet(API.sections); }
-async function addSection(section){ return await apiPost(API.sections, section); }
-async function saveSection(section){ return await apiPut(`${API.sections}/${section.id}`, section); }
-async function deleteSectionById(id){ return await apiDelete(`${API.sections}/${id}`); }
-
-async function loadProducts(){ return await apiGet(API.products); }
-async function addProduct(product){ return await apiPost(API.products, product); }
-async function saveProduct(product){ return await apiPut(`${API.products}/${product.id}`, product); }
-async function deleteProductById(id){ return await apiDelete(`${API.products}/${id}`); }
-
-/* ----------------------------
-   Admin state & helpers
-   ---------------------------- */
-function isAdmin(){return sessionStorage.getItem('admin')==='1'}
-function setAdmin(v){sessionStorage.setItem('admin',v?'1':'0'); updateAdminUI();}
-
-/* ----------------------------
-   Rendering & business logic
-   ---------------------------- */
-let editingId=null;
-let editingSectionId=null;
-
-async function renderSections(){
-  const list = $('#sections-list');
-  list.innerHTML = '';
-  const sections = await loadSections();
-
-  sections.forEach(s=>{
-    const li = document.createElement('li');
-    li.style.display='flex'; li.style.justifyContent='space-between'; li.style.alignItems='center'; li.style.marginBottom='4px';
-    li.innerHTML = `<span>${s.name}</span>
-                    <span>
-                      <button class="small btn secondary edit-section" data-id="${s.id}">Edit</button>
-                      <button class="small btn secondary del-section" data-id="${s.id}">Suppr</button>
-                    </span>`;
-    list.appendChild(li);
-  });
-  qs('.edit-section').forEach(b=>b.onclick=()=>startEditSection(b.dataset.id));
-  qs('.del-section').forEach(b=>b.onclick=()=>handleDeleteSection(b.dataset.id));
-
-  await updateSectionSelects(sections);
-  buildSectionNav(sections);
-  renderSectionFilter();
+// Fonctions pour les sections
+async function loadSections() { 
+  return await apiGet(API.sections); 
 }
 
-async function updateSectionSelects(sections){
+async function addSection(section) { 
+  return await apiPost(API.sections, section); 
+}
+
+async function saveSection(section) { 
+  return await apiPut(`${API.sections}/${section.id}`, section); 
+}
+
+async function deleteSectionById(id) { 
+  return await apiDelete(`${API.sections}/${id}`); 
+}
+
+// Fonctions pour les produits
+async function loadProducts() { 
+  return await apiGet(API.products); 
+}
+
+async function addProduct(product) { 
+  return await apiPost(API.products, product); 
+}
+
+async function saveProduct(product) { 
+  return await apiPut(`${API.products}/${product.id}`, product); 
+}
+
+async function deleteProductById(id) { 
+  return await apiDelete(`${API.products}/${id}`); 
+}
+
+// Gestion de l'admin
+function isAdmin() { 
+  return sessionStorage.getItem('admin') === '1'; 
+}
+
+function setAdmin(v) { 
+  sessionStorage.setItem('admin', v ? '1' : '0'); 
+  updateAdminUI(); 
+}
+
+// Variables d'état
+let editingId = null;
+let editingSectionId = null;
+
+// Fonction pour afficher les sections
+async function renderSections() {
+  try {
+    const list = $('#sections-list');
+    if (!list) return;
+    
+    list.innerHTML = '';
+    const sections = await loadSections();
+
+    // Liste admin
+    sections.forEach(s => {
+      const li = document.createElement('li');
+      li.style.display = 'flex';
+      li.style.justifyContent = 'space-between';
+      li.style.alignItems = 'center';
+      li.style.marginBottom = '4px';
+      li.innerHTML = `
+        <span>${s.name}</span>
+        <span>
+          <button class="small btn secondary edit-section" data-id="${s.id}">Edit</button>
+          <button class="small btn secondary del-section" data-id="${s.id}">Suppr</button>
+        </span>
+      `;
+      list.appendChild(li);
+    });
+
+    // Événements pour les boutons
+    qs('.edit-section').forEach(b => b.onclick = () => startEditSection(b.dataset.id));
+    qs('.del-section').forEach(b => b.onclick = () => handleDeleteSection(b.dataset.id));
+
+    // Mise à jour des sélecteurs
+    await updateSectionSelects(sections);
+    buildSectionNav(sections);
+    await renderSectionFilter();
+  } catch (error) {
+    console.error('Error in renderSections:', error);
+  }
+}
+
+async function updateSectionSelects(sections) {
   const sel = $('#section-select');
+  if (!sel) return;
+  
   sel.innerHTML = '<option value="">-- Choisir une section --</option>';
-  sections.forEach(s=>{
+  sections.forEach(s => {
     const opt = document.createElement('option');
-    opt.value = s.id; opt.textContent = s.name;
+    opt.value = s.id;
+    opt.textContent = s.name;
     sel.appendChild(opt);
   });
 }
 
-async function renderSectionFilter(){
+async function renderSectionFilter() {
   const sel = $('#section-filter');
+  if (!sel) return;
+  
   sel.innerHTML = '<option value="">Toutes les sections</option>';
   const sections = await loadSections();
-  sections.forEach(s=>{
+  sections.forEach(s => {
     const opt = document.createElement('option');
-    opt.value = s.id; opt.textContent = s.name;
+    opt.value = s.id;
+    opt.textContent = s.name;
     sel.appendChild(opt);
   });
 }
 
-/* Sections management */
-function clearSectionForm(){ editingSectionId=null; $('#section-input').value=''; }
-async function addOrUpdateSection(){
-  const name = $('#section-input').value.trim();
-  if(!name) return alert('Nom de section requis');
-  if(editingSectionId){
-    try{
-      const s = { id: editingSectionId, name };
-      await saveSection(s);
-    }catch(e){ console.warn(e); alert('Erreur mise à jour section'); }
-  } else {
-    try{ await addSection({ name }); }catch(e){ console.warn(e); alert('Erreur création section'); }
-  }
-  clearSectionForm();
-  await renderSections();
-  await renderProducts();
-}
-async function startEditSection(id){
-  const s = (await loadSections()).find(x=>x.id===id);
-  if(!s) return;
-  editingSectionId = id;
-  $('#section-input').value = s.name;
-}
-async function handleDeleteSection(id){
-  if(!confirm('Supprimer cette section et tous ses articles ?')) return;
-  try{ await deleteSectionById(id); }catch(e){ console.warn(e); }
-  const products = await loadProducts();
-  for(const p of products){
-    if(p.sectionId === id){
-      try{ await deleteProductById(p.id); }catch(e){ console.warn(e); }
-    }
-  }
-  await renderSections();
-  await renderProducts();
+// Gestion des sections
+function clearSectionForm() { 
+  editingSectionId = null; 
+  $('#section-input').value = ''; 
 }
 
-/* Products - VERSION CORRIGÉE */
-function clearForm(){ 
-  editingId=null; 
-  $('#name-input').value=''; 
-  $('#price-input').value=''; 
-  $('#desc-input').value=''; 
-  $('#file').value=''; 
-  $('#preview').innerHTML=''; 
-  $('#section-select').value=''; 
-}
-
-async function addOrUpdate(){
-  const n = $('#name-input').value.trim();
-  const pr = parseFloat($('#price-input').value) || 0;
-  const d = $('#desc-input').value.trim();
-  const secId = $('#section-select').value;
-  if(!n) return alert('Nom requis');
-  if(!secId) return alert('Section requise');
-
-  const formData = new FormData();
-  formData.append('name', n);
-  formData.append('price', pr);
-  formData.append('description', d);
-  formData.append('sectionId', secId);
-
-  const f = $('#file').files[0];
-  if(f){
-    formData.append('image', f);
-  }
-
+async function addOrUpdateSection() {
   try {
-    let res;
-    if(editingId){
-      res = await fetch(`${API.products}/${editingId}`, {
+    const name = $('#section-input').value.trim();
+    if (!name) return alert('Nom de section requis');
+    
+    if (editingSectionId) {
+      await saveSection({ id: editingSectionId, name });
+    } else {
+      await addSection({ name });
+    }
+    
+    clearSectionForm();
+    await renderSections();
+    await renderProducts();
+  } catch (error) {
+    console.error('Error in addOrUpdateSection:', error);
+    alert('Erreur lors de l\'opération sur la section');
+  }
+}
+
+async function startEditSection(id) {
+  try {
+    const sections = await loadSections();
+    const s = sections.find(x => x.id === id);
+    if (!s) return;
+    
+    editingSectionId = id;
+    $('#section-input').value = s.name;
+  } catch (error) {
+    console.error('Error in startEditSection:', error);
+  }
+}
+
+async function handleDeleteSection(id) {
+  if (!confirm('Supprimer cette section et tous ses articles ?')) return;
+  
+  try {
+    await deleteSectionById(id);
+    
+    // Supprimer les produits de cette section
+    const products = await loadProducts();
+    for (const p of products) {
+      if (p.sectionId === id) {
+        await deleteProductById(p.id);
+      }
+    }
+    
+    await renderSections();
+    await renderProducts();
+  } catch (error) {
+    console.error('Error in handleDeleteSection:', error);
+    alert('Erreur lors de la suppression de la section');
+  }
+}
+
+// Gestion des produits
+function clearForm() {
+  editingId = null;
+  $('#name-input').value = '';
+  $('#price-input').value = '';
+  $('#desc-input').value = '';
+  $('#file').value = '';
+  $('#preview').innerHTML = '';
+  $('#section-select').value = '';
+}
+
+async function addOrUpdate() {
+  try {
+    const n = $('#name-input').value.trim();
+    const pr = parseFloat($('#price-input').value) || 0;
+    const d = $('#desc-input').value.trim();
+    const secId = $('#section-select').value;
+    
+    if (!n) return alert('Nom requis');
+    if (!secId) return alert('Section requise');
+
+    // Préparer FormData pour l'envoi
+    const formData = new FormData();
+    formData.append('name', n);
+    formData.append('price', pr.toString());
+    formData.append('description', d);
+    formData.append('sectionId', secId);
+
+    const f = $('#file').files[0];
+    if (f) {
+      formData.append('image', f);
+    }
+
+    let result;
+    if (editingId) {
+      const response = await fetch(`${API.products}/${editingId}`, {
         method: 'PUT',
         body: formData
       });
+      
+      if (!response.ok) throw new Error('Erreur lors de la modification');
+      result = await response.json();
     } else {
-      res = await fetch(API.products, {
+      const response = await fetch(API.products, {
         method: 'POST',
         body: formData
       });
+      
+      if (!response.ok) throw new Error('Erreur lors de l\'ajout');
+      result = await response.json();
     }
-    
-    if(!res.ok) throw new Error('Erreur serveur');
-    const result = await res.json();
-    
-  } catch(e){
-    console.warn(e);
+
+    clearForm();
+    await renderProducts();
+  } catch (error) {
+    console.error('Error in addOrUpdate:', error);
     alert('Erreur ajout / modification produit');
   }
-
-  clearForm();
-  await renderProducts();
 }
 
-async function startEdit(id){
-  const p = (await loadProducts()).find(x=>x.id===id);
-  if(!p) return;
-  editingId = id;
-  $('#name-input').value = p.name || '';
-  $('#price-input').value = p.price || '';
-  $('#desc-input').value = p.description || '';
-  $('#section-select').value = p.sectionId || '';
-  
-  // Afficher l'image existante avec l'URL complète
-  if(p.image) {
-    $('#preview').innerHTML = `<img src='${API.base}${p.image}' style="max-width:100%;max-height:100%">`;
-  } else {
-    $('#preview').innerHTML = '';
+async function startEdit(id) {
+  try {
+    const products = await loadProducts();
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    
+    editingId = id;
+    $('#name-input').value = p.name || '';
+    $('#price-input').value = p.price || '';
+    $('#desc-input').value = p.description || '';
+    $('#section-select').value = p.sectionId || '';
+    
+    if (p.image) {
+      $('#preview').innerHTML = `<img src="${API.base}${p.image}" style="max-width:100%;max-height:100%">`;
+    }
+    
+    if (window.innerWidth <= 600) {
+      $('#admin-panel').scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (error) {
+    console.error('Error in startEdit:', error);
   }
+}
+
+async function handleDeleteProduct(id) {
+  if (!confirm('Supprimer cet article ?')) return;
   
-  if(window.innerWidth <= 600) $('#admin-panel').scrollIntoView({behavior:'smooth'});
+  try {
+    await deleteProductById(id);
+    await renderProducts();
+  } catch (error) {
+    console.error('Error in handleDeleteProduct:', error);
+    alert('Erreur lors de la suppression du produit');
+  }
 }
 
-async function handleDeleteProduct(id){
-  if(!confirm('Supprimer cet article ?')) return;
-  try{ await deleteProductById(id); }catch(e){ console.warn(e); }
-  await renderProducts();
+// Fonction pour générer l'URL WhatsApp
+function whatsappUrl(p) {
+  const base = 'https://wa.me/' + CONFIG.whatsapp.replace(/\D/g, '');
+  const productUrl = `${window.location.origin}${window.location.pathname}#product-${encodeURIComponent(p.name.toLowerCase().replace(/\s+/g, '-'))}`;
+  const msg = LANG === 'fr' 
+    ? `Bonjour Mme Laure, je souhaite commander ${p.name} au prix de ${p.price.toLocaleString()} Fcfa.\nVoir le produit ici : ${productUrl}`
+    : `Hello, I want to order ${p.name} for ${p.price.toLocaleString()} Fcfa.\nSee the product here: ${productUrl}`;
+  return base + '?text=' + encodeURIComponent(msg);
 }
 
-/* WhatsApp helper */
-function whatsappUrl(p){
-  const base='https://wa.me/'+CONFIG.whatsapp.replace(/\D/g,'');
-  const productUrl=`${window.location.origin}${window.location.pathname}#product-${encodeURIComponent(p.name.toLowerCase().replace(/\s+/g,'-'))}`;
-  const msg=LANG==='fr'
-    ?`Bonjour Mme Laure, je souhaite commander ${p.name} au prix de ${p.price.toLocaleString()} Fcfa.\nVoir le produit ici : ${productUrl}`
-    :`Hello, I want to order ${p.name} for ${p.price.toLocaleString()} Fcfa.\nSee the product here: ${productUrl}`;
-  return base+'?text='+encodeURIComponent(msg);
-}
-
-/* Build section nav */
-function buildSectionNav(sections){
+// Navigation par sections
+function buildSectionNav(sections) {
   const nav = $('#section-nav');
+  if (!nav) return;
+  
   nav.innerHTML = '';
+  
   const allBtn = document.createElement('button');
   allBtn.textContent = 'Toutes';
-  allBtn.onclick = ()=>{
-    qs('#section-nav button').forEach(b=>b.classList.remove('active'));
+  allBtn.classList.add('active');
+  allBtn.onclick = () => {
+    qs('#section-nav button').forEach(b => b.classList.remove('active'));
     allBtn.classList.add('active');
     $('#section-filter').value = '';
     renderProducts();
   };
-  allBtn.classList.add('active');
   nav.appendChild(allBtn);
 
-  sections.forEach(s=>{
-    const b = document.createElement('button');
-    b.textContent = s.name;
-    b.onclick = ()=>{
-      qs('#section-nav button').forEach(b=>b.classList.remove('active'));
-      b.classList.add('active');
+  sections.forEach(s => {
+    const btn = document.createElement('button');
+    btn.textContent = s.name;
+    btn.onclick = () => {
+      qs('#section-nav button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
       $('#section-filter').value = s.id;
-      renderProducts().then(()=> {
-        const el = document.querySelector(`#products-grid [data-section="${s.id}"]`);
-        if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
-      });
+      renderProducts();
     };
-    nav.appendChild(b);
+    nav.appendChild(btn);
   });
 }
 
-/* Render products grouped by section - VERSION CORRIGÉE */
-async function renderProducts(){
-  const grid = $('#products-grid');
-  grid.innerHTML = '';
-  let products = await loadProducts();
-  const sections = await loadSections();
-  const q = normalizeString($('#search').value.trim());
-  const sectionFilter = $('#section-filter').value;
-  const sortVal = $('#sort').value;
+// Affichage des produits
+async function renderProducts() {
+  try {
+    const grid = $('#products-grid');
+    if (!grid) return;
+    
+    grid.innerHTML = '';
+    
+    const products = await loadProducts();
+    const sections = await loadSections();
+    const q = normalizeString($('#search').value.trim());
+    const sectionFilter = $('#section-filter').value;
+    const sortVal = $('#sort').value;
 
-  if(sortVal === 'price-asc') products.sort((a,b)=>a.price - b.price);
-  else if(sortVal === 'price-desc') products.sort((a,b)=>b.price - a.price);
+    // Trier les produits
+    let sortedProducts = [...products];
+    if (sortVal === 'price-asc') sortedProducts.sort((a, b) => a.price - b.price);
+    else if (sortVal === 'price-desc') sortedProducts.sort((a, b) => b.price - a.price);
 
-  const matchedSectionIds = new Set();
-  if(q){
-    sections.forEach(s=>{
-      if(normalizeString(s.name).includes(q)) matchedSectionIds.add(s.id);
-    });
-  }
-
-  for(const section of sections){
-    if(sectionFilter && section.id !== sectionFilter) continue;
-    let sectProducts = products.filter(p => p.sectionId === section.id);
-
-    if(q){
-      sectProducts = sectProducts.filter(p => {
-        const productText = normalizeString((p.name || '') + ' ' + (p.description || ''));
-        return productText.includes(q) || matchedSectionIds.has(section.id);
+    // IDs des sections correspondant à la recherche
+    const matchedSectionIds = new Set();
+    if (q) {
+      sections.forEach(s => {
+        if (normalizeString(s.name).includes(q)) matchedSectionIds.add(s.id);
       });
     }
 
-    if(sectProducts.length === 0) continue;
-
-    const secDiv = document.createElement('div');
-    secDiv.setAttribute('data-section', section.id);
-    secDiv.innerHTML = `<h3 id="section-${section.id}">${section.name}</h3>`;
-    const sectGrid = document.createElement('div'); sectGrid.className = 'grid';
-
-    for(const x of sectProducts){
-      const c = document.createElement('article'); c.className = 'card';
-      // CORRECTION : Utiliser l'URL complète pour les images
-      const imageSrc = x.image ? `${API.base}${x.image}` : '';
-      c.innerHTML = `<div class='thumb' data-img='${imageSrc}'>${x.image ? `<img src='${imageSrc}'>` : '<div class="muted">Aucune image</div>'}</div>
-      <div class='card-body'>
-        <div class='name'>${x.name}</div>
-        <div class='desc'>${x.description || ''}</div>
-        <div style='display:flex;justify-content:space-between;align-items:center'>
-          <div class='price'>${(x.price || 0).toLocaleString()} Fcfa</div>
-          <div class='card-actions'>
-            <a class='small btn' href='${whatsappUrl(x)}' target='_blank'>${t('order')}</a>
-            ${isAdmin() ? `<div class="admin-actions">
-              <button class="small btn secondary edit" data-id="${x.id}">Edit</button>
-              <button class="small btn secondary del" data-id="${x.id}">Suppr</button>
-            </div>` : ''}
+    // Afficher par section
+    for (const section of sections) {
+      if (sectionFilter && section.id !== sectionFilter) continue;
+      
+      let sectProducts = sortedProducts.filter(p => p.sectionId === section.id);
+      
+      // Appliquer la recherche
+      if (q) {
+        sectProducts = sectProducts.filter(p => {
+          const productText = normalizeString((p.name || '') + ' ' + (p.description || ''));
+          return productText.includes(q) || matchedSectionIds.has(section.id);
+        });
+      }
+      
+      if (sectProducts.length === 0) continue;
+      
+      const secDiv = document.createElement('div');
+      secDiv.setAttribute('data-section', section.id);
+      secDiv.innerHTML = `<h3 id="section-${section.id}">${section.name}</h3>`;
+      
+      const sectGrid = document.createElement('div');
+      sectGrid.className = 'grid';
+      
+      for (const product of sectProducts) {
+        const card = document.createElement('article');
+        card.className = 'card';
+        
+        const imageSrc = product.image ? `${API.base}${product.image}` : '';
+        const imageHtml = product.image 
+          ? `<img src="${imageSrc}" alt="${product.name}">` 
+          : '<div class="muted">Aucune image</div>';
+        
+        card.innerHTML = `
+          <div class="thumb">${imageHtml}</div>
+          <div class="card-body">
+            <div class="name">${product.name}</div>
+            <div class="desc">${product.description || ''}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div class="price">${(product.price || 0).toLocaleString()} Fcfa</div>
+              <div class="card-actions">
+                <a class="small btn" href="${whatsappUrl(product)}" target="_blank">${t('order')}</a>
+                ${isAdmin() ? `
+                  <div class="admin-actions">
+                    <button class="small btn secondary edit" data-id="${product.id}">Edit</button>
+                    <button class="small btn secondary del" data-id="${product.id}">Suppr</button>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>`;
-      sectGrid.appendChild(c);
+        `;
+        
+        sectGrid.appendChild(card);
+      }
+      
+      secDiv.appendChild(sectGrid);
+      grid.appendChild(secDiv);
     }
-
-    secDiv.appendChild(sectGrid);
-    grid.appendChild(secDiv);
+    
+    // Événements pour les images
+    qs('.thumb').forEach(thumb => {
+      thumb.onclick = () => {
+        const img = thumb.querySelector('img');
+        if (img && img.src) {
+          $('#img-modal img').src = img.src;
+          $('#img-modal').style.display = 'flex';
+        }
+      };
+    });
+    
+    // Événements pour les boutons admin
+    qs('.edit').forEach(btn => {
+      btn.onclick = () => startEdit(btn.dataset.id);
+    });
+    
+    qs('.del').forEach(btn => {
+      btn.onclick = () => handleDeleteProduct(btn.dataset.id);
+    });
+  } catch (error) {
+    console.error('Error in renderProducts:', error);
   }
-
-  qs('.thumb').forEach(t=>t.onclick=()=>{
-    const src = t.querySelector('img')?.src;
-    if(src){ $('#img-modal img').src = src; $('#img-modal').style.display = 'flex'; }
-  });
-  $('#close-modal').onclick = ()=>$('#img-modal').style.display = 'none';
-
-  qs('.edit').forEach(b=>b.onclick=()=>startEdit(b.dataset.id));
-  qs('.del').forEach(b=>b.onclick=()=>handleDeleteProduct(b.dataset.id));
 }
 
-/* ----------------------------
-   Admin UI update & events
-   ---------------------------- */
-function updateAdminUI(){
+// Mise à jour de l'interface admin
+function updateAdminUI() {
   const panel = $('#admin-panel');
-  if(isAdmin()){
+  const adminBtn = $('#admin-btn');
+  
+  if (!panel || !adminBtn) return;
+  
+  if (isAdmin()) {
     panel.classList.add('show');
-    $('#admin-btn').style.display='none';
+    adminBtn.style.display = 'none';
   } else {
     panel.classList.remove('show');
-    $('#admin-btn').style.display='inline-block';
+    adminBtn.style.display = 'inline-block';
   }
-  renderSections();
-  renderProducts();
 }
 
-/* ----------------------------
-   Event bindings & init
-   ---------------------------- */
-document.addEventListener('DOMContentLoaded', async ()=>{
-  $('#year').textContent = new Date().getFullYear();
-
-  await renderSections();
-  await renderProducts();
-  updateAdminUI();
-
-  $('#admin-btn').onclick = ()=> {
-    const pw = prompt("Réservé à l'administrateur");
-    if(pw === CONFIG.defaultPassword) setAdmin(true);
-    else alert('Mot de passe incorrect');
-  };
-  $('#logout').onclick = ()=>{ setAdmin(false); };
-
-  $('#add-btn').onclick = addOrUpdate;
-  $('#cancel-edit').onclick = clearForm;
-  $('#add-section-btn').onclick = addOrUpdateSection;
-  $('#clear-section-btn').onclick = clearSectionForm;
-  $('#search').oninput = renderProducts;
-  $('#sort').onchange = renderProducts;
-  $('#section-filter').onchange = renderProducts;
-
-  let minimized = false;
-  $('#admin-toggle').onclick = ()=>{
-    const content = $('#admin-content');
-    minimized = !minimized;
-    content.style.display = minimized ? 'none' : 'block';
-    $('#admin-toggle').textContent = minimized ? '+' : '–';
-  };
-
-  $('#file').onchange = e=>{
-    const f = e.target.files[0]; if(!f) return;
-    const reader = new FileReader();
-    reader.onload = ()=>$('#preview').innerHTML = `<img src='${reader.result}'>`;
-    reader.readAsDataURL(f);
-  };
-
-  $('#lang-fr').onclick = ()=>{ LANG='fr'; renderProducts(); };
-  $('#lang-en').onclick = ()=>{ LANG='en'; renderProducts(); };
-
-  if(isAdmin()) updateAdminUI();
+// Initialisation
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    // Année du footer
+    const yearEl = $('#year');
+    if (yearEl) yearEl.textContent = new Date().getFullYear();
+    
+    // Initialisation de l'interface
+    await renderSections();
+    await renderProducts();
+    updateAdminUI();
+    
+    // Événements
+    $('#admin-btn').onclick = () => {
+      const pw = prompt("Réservé à l'administrateur");
+      if (pw === CONFIG.defaultPassword) {
+        setAdmin(true);
+      } else {
+        alert('Mot de passe incorrect');
+      }
+    };
+    
+    $('#logout').onclick = () => setAdmin(false);
+    $('#add-btn').onclick = addOrUpdate;
+    $('#cancel-edit').onclick = clearForm;
+    $('#add-section-btn').onclick = addOrUpdateSection;
+    $('#clear-section-btn').onclick = clearSectionForm;
+    
+    $('#search').oninput = renderProducts;
+    $('#sort').onchange = renderProducts;
+    $('#section-filter').onchange = renderProducts;
+    
+    // Toggle du panel admin
+    let minimized = false;
+    $('#admin-toggle').onclick = () => {
+      const content = $('#admin-content');
+      minimized = !minimized;
+      content.style.display = minimized ? 'none' : 'block';
+      $('#admin-toggle').textContent = minimized ? '+' : '–';
+    };
+    
+    // Preview d'image
+    $('#file').onchange = e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        $('#preview').innerHTML = `<img src="${reader.result}">`;
+      };
+      reader.readAsDataURL(f);
+    };
+    
+    // Changement de langue
+    $('#lang-fr').onclick = () => { LANG = 'fr'; renderProducts(); };
+    $('#lang-en').onclick = () => { LANG = 'en'; renderProducts(); };
+    
+    // Modal d'image
+    $('#close-modal').onclick = () => {
+      $('#img-modal').style.display = 'none';
+    };
+    
+    // Vérifier si déjà admin
+    if (isAdmin()) updateAdminUI();
+  } catch (error) {
+    console.error('Error during initialization:', error);
+  }
 });
 </script>
 </body>
