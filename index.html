@@ -595,10 +595,12 @@ function buildSectionNav(sections) {
 
   nav.innerHTML = '';
 
+  // Bouton "Toutes"
   const allBtn = document.createElement('button');
   allBtn.textContent = 'Toutes';
   allBtn.classList.add('active');
   allBtn.onclick = () => {
+    console.log('🎯 Clic sur "Toutes"');
     qs('#section-nav button').forEach(b => b.classList.remove('active'));
     allBtn.classList.add('active');
     $('#section-filter').value = '';
@@ -606,44 +608,69 @@ function buildSectionNav(sections) {
   };
   nav.appendChild(allBtn);
 
-  // TRIER LES SECTIONS PAR ID DÉCROISSANT
-  sections.sort((a, b) => b.id - a.id);
+  // Trier les sections par ID décroissant (les plus récentes en premier)
+  sections.sort((a, b) => {
+    const idA = a._id || a.id;
+    const idB = b._id || b.id;
+    return idB.localeCompare(idA);
+  });
 
+  // Boutons pour chaque section
   sections.forEach(s => {
+    const sectionId = s._id || s.id;
+    const sectionName = s.name;
+    
+    console.log('📋 Création bouton pour la section:', sectionName, 'ID:', sectionId);
+
     const btn = document.createElement('button');
-    btn.textContent = s.name;
+    btn.textContent = sectionName;
+    btn.setAttribute('data-section-id', sectionId);
+    
     btn.onclick = () => {
+      console.log('🎯 Clic sur section:', sectionName, 'ID:', sectionId);
+      
+      // Mettre à jour les classes actives
       qs('#section-nav button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      $('#section-filter').value = s.id;
-      renderProducts();
+      
+      // Mettre à jour le filtre et rafraîchir
+      $('#section-filter').value = sectionId;
+      renderProducts().then(() => {
+        // Scroll vers la section après le rendu
+        const sectionElement = document.querySelector(`[data-section="${sectionId}"]`);
+        if (sectionElement) {
+          sectionElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start',
+            inline: 'nearest'
+          });
+        }
+      });
     };
+    
     nav.appendChild(btn);
   });
+
+  console.log('✅ Navigation par sections créée avec', sections.length, 'sections');
 }
 
 // Affichage des produits
 // Affichage des produits
-async function renderProducts() {
+sync function renderProducts() {
   try {
     console.log('🔄 Début de renderProducts');
     const grid = $('#products-grid');
-    if (!grid) {
-      console.error('❌ products-grid non trouvé');
-      return;
-    }
+    if (!grid) return;
 
     grid.innerHTML = '';
 
     const products = await loadProducts();
-    console.log('📦 Produits chargés:', products);
-
     const sections = await loadSections();
-    console.log('📁 Sections chargées:', sections);
-
     const q = normalizeString($('#search').value.trim());
     const sectionFilter = $('#section-filter').value;
     const sortVal = $('#sort').value;
+
+    console.log('🔍 Filtres - Recherche:', q, 'Section:', sectionFilter, 'Tri:', sortVal);
 
     // Trier les produits - LES PLUS RÉCENTS EN PREMIER
     let sortedProducts = [...products];
@@ -660,18 +687,34 @@ async function renderProducts() {
       });
     }
 
+    // Trier les sections par ID décroissant
+    sections.sort((a, b) => {
+      const idA = a._id || a.id;
+      const idB = b._id || b.id;
+      return idB.localeCompare(idA);
+    });
+
     // IDs des sections correspondant à la recherche
     const matchedSectionIds = new Set();
     if (q) {
       sections.forEach(s => {
-        if (normalizeString(s.name).includes(q)) matchedSectionIds.add(s._id || s.id);
+        const sectionId = s._id || s.id;
+        if (normalizeString(s.name).includes(q)) matchedSectionIds.add(sectionId);
       });
     }
+
+    let hasDisplayedProducts = false;
 
     // Afficher par section
     for (const section of sections) {
       const sectionId = section._id || section.id;
-      if (sectionFilter && sectionId !== sectionFilter) continue;
+      const sectionName = section.name;
+
+      // Appliquer le filtre de section
+      if (sectionFilter && sectionId !== sectionFilter) {
+        console.log(`⏩ Section "${sectionName}" ignorée (filtre: ${sectionFilter})`);
+        continue;
+      }
 
       let sectProducts = sortedProducts.filter(p => (p.sectionId || p.sectionId) === sectionId);
 
@@ -683,72 +726,21 @@ async function renderProducts() {
         });
       }
 
-      if (sectProducts.length === 0) continue;
+      if (sectProducts.length === 0) {
+        console.log(`⏩ Section "${sectionName}" sans produits correspondants`);
+        continue;
+      }
+
+      console.log(`✅ Affichage section "${sectionName}" avec ${sectProducts.length} produits`);
 
       const secDiv = document.createElement('div');
       secDiv.setAttribute('data-section', sectionId);
-      secDiv.innerHTML = `<h3 id="section-${sectionId}">${section.name}</h3>`;
+      secDiv.innerHTML = `<h3 id="section-${sectionId}">${sectionName}</h3>`;
 
       const sectGrid = document.createElement('div');
       sectGrid.className = 'grid';
 
       for (const product of sectProducts) {
-        console.log('🎯 Affichage produit:', product.name, 'Image:', product.image, 'Section:', product.sectionId);
-
-        const card = document.createElement('article');
-        card.className = 'card';
-
-        const imageSrc = product.image || '';
-        const imageHtml = imageSrc
-          ? `<img src="${imageSrc}" alt="${product.name}" onerror="console.error('❌ Image failed to load:', this.src)">`
-          : '<div class="muted">Aucune image</div>';
-
-        const productId = product._id || product.id;
-        
-        card.innerHTML = `
-          <div class="thumb">${imageHtml}</div>
-          <div class="card-body">
-            <div class="name">${product.name}</div>
-            <div class="desc">${product.description || ''}</div>
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <div class="price">${(product.price || 0).toLocaleString()} Fcfa</div>
-              <div class="card-actions">
-                <a class="small btn" href="${whatsappUrl(product)}" target="_blank">${t('order')}</a>
-                ${isAdmin() ? `
-                  <div class="admin-actions">
-                    <button class="small btn secondary edit" data-id="${productId}">Edit</button>
-                    <button class="small btn secondary del" data-id="${productId}">Suppr</button>
-                  </div>
-                ` : ''}
-              </div>
-            </div>
-          </div>
-        `;
-
-        sectGrid.appendChild(card);
-      }
-
-      secDiv.appendChild(sectGrid);
-      grid.appendChild(secDiv);
-    }
-
-    // Afficher les produits sans section (sectionId undefined ou 'undefined')
-    const productsWithoutSection = sortedProducts.filter(p => 
-      !p.sectionId || p.sectionId === 'undefined' || p.sectionId === 'null'
-    );
-
-    if (productsWithoutSection.length > 0) {
-      console.log('📦 Produits sans section:', productsWithoutSection);
-      
-      const secDiv = document.createElement('div');
-      secDiv.setAttribute('data-section', 'undefined');
-      secDiv.innerHTML = `<h3 id="section-undefined">⚠️ Produits non classés</h3>`;
-      const sectGrid = document.createElement('div');
-      sectGrid.className = 'grid';
-
-      for (const product of productsWithoutSection) {
-        console.log('🎯 Affichage produit non classé:', product.name, 'Image:', product.image);
-        
         const card = document.createElement('article');
         card.className = 'card';
 
@@ -758,7 +750,7 @@ async function renderProducts() {
           : '<div class="muted">Aucune image</div>';
 
         const productId = product._id || product.id;
-
+        
         card.innerHTML = `
           <div class="thumb">${imageHtml}</div>
           <div class="card-body">
@@ -780,10 +772,76 @@ async function renderProducts() {
         `;
 
         sectGrid.appendChild(card);
+        hasDisplayedProducts = true;
       }
 
       secDiv.appendChild(sectGrid);
       grid.appendChild(secDiv);
+    }
+
+    // Afficher les produits sans section UNIQUEMENT si pas de filtre actif
+    if (!sectionFilter) {
+      const productsWithoutSection = sortedProducts.filter(p => 
+        !p.sectionId || p.sectionId === 'undefined' || p.sectionId === 'null'
+      );
+
+      if (productsWithoutSection.length > 0) {
+        console.log('📦 Affichage produits sans section:', productsWithoutSection.length);
+        
+        const secDiv = document.createElement('div');
+        secDiv.setAttribute('data-section', 'undefined');
+        secDiv.innerHTML = `<h3 id="section-undefined">⚠️ Produits non classés</h3>`;
+        const sectGrid = document.createElement('div');
+        sectGrid.className = 'grid';
+
+        for (const product of productsWithoutSection) {
+          const card = document.createElement('article');
+          card.className = 'card';
+
+          const imageSrc = product.image || '';
+          const imageHtml = imageSrc
+            ? `<img src="${imageSrc}" alt="${product.name}">`
+            : '<div class="muted">Aucune image</div>';
+
+          const productId = product._id || product.id;
+
+          card.innerHTML = `
+            <div class="thumb">${imageHtml}</div>
+            <div class="card-body">
+              <div class="name">${product.name}</div>
+              <div class="desc">${product.description || ''}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div class="price">${(product.price || 0).toLocaleString()} Fcfa</div>
+                <div class="card-actions">
+                  <a class="small btn" href="${whatsappUrl(product)}" target="_blank">${t('order')}</a>
+                  ${isAdmin() ? `
+                    <div class="admin-actions">
+                      <button class="small btn secondary edit" data-id="${productId}">Edit</button>
+                      <button class="small btn secondary del" data-id="${productId}">Suppr</button>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+
+          sectGrid.appendChild(card);
+          hasDisplayedProducts = true;
+        }
+
+        secDiv.appendChild(sectGrid);
+        grid.appendChild(secDiv);
+      }
+    }
+
+    // Message si aucun produit trouvé
+    if (!hasDisplayedProducts) {
+      grid.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: var(--muted);">
+          <h3>Aucun produit trouvé</h3>
+          <p>Essayez de modifier vos critères de recherche ou de filtre</p>
+        </div>
+      `;
     }
 
     // Événements pour les images
@@ -806,13 +864,35 @@ async function renderProducts() {
       btn.onclick = () => handleDeleteProduct(btn.dataset.id);
     });
 
-    console.log('✅ renderProducts terminé');
+    console.log('✅ renderProducts terminé - Produits affichés:', hasDisplayedProducts);
 
   } catch (error) {
     console.error('❌ Error in renderProducts:', error);
   }
 }
 
+  // Synchroniser la navigation et le select de filtre
+function syncSectionFilter() {
+  const sectionFilter = $('#section-filter').value;
+  const navButtons = qs('#section-nav button');
+  
+  // Retirer toutes les classes active
+  navButtons.forEach(btn => btn.classList.remove('active'));
+  
+  if (!sectionFilter) {
+    // Activer "Toutes"
+    navButtons[0]?.classList.add('active');
+  } else {
+    // Activer le bouton correspondant
+    const activeBtn = navButtons.find(btn => 
+      btn.getAttribute('data-section-id') === sectionFilter
+    );
+    if (activeBtn) {
+      activeBtn.classList.add('active');
+    }
+  }
+}
+  
 // Mise à jour de l'interface admin
 function updateAdminUI() {
   const panel = $('#admin-panel');
@@ -868,7 +948,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     $('#search').oninput = renderProducts;
     $('#sort').onchange = renderProducts;
-    $('#section-filter').onchange = renderProducts;
+    $('#section-filter').onchange = () => {
+  syncSectionFilter();
+  renderProducts();
+};
 
     // Toggle du panel admin
     let minimized = false;
@@ -909,6 +992,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </body>
 </html>
+
 
 
 
