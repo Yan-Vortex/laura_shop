@@ -285,7 +285,13 @@ async function saveSection(section) {
 }
 
 async function deleteSectionById(id) {
-  return await apiDelete(`${API.sections}/${id}`);
+  try {
+    const response = await fetch(`${API.sections}/${id}`, { method: 'DELETE' });
+    return response.ok;
+  } catch (e) {
+    console.error('API DELETE error:', e);
+    return false;
+  }
 }
 
 // Fonctions pour les produits
@@ -302,7 +308,13 @@ async function saveProduct(product) {
 }
 
 async function deleteProductById(id) {
-  return await apiDelete(`${API.products}/${id}`);
+  try {
+    const response = await fetch(`${API.products}/${id}`, { method: 'DELETE' });
+    return response.ok;
+  } catch (e) {
+    console.error('API DELETE error:', e);
+    return false;
+  }
 }
 
 // Gestion de l'admin
@@ -810,6 +822,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </body>
 </html>
+
 
 
 
