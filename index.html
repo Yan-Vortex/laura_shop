@@ -670,7 +670,7 @@ async function renderProducts() {
         const card = document.createElement('article');
         card.className = 'card';
 
-        const imageSrc = product.image ? `${API.base}${product.image}` : '';
+        const imageSrc = product.image || '';
         const imageHtml = product.image
           ? `<img src="${imageSrc}" alt="${product.name}">`
           : '<div class="muted">Aucune image</div>';
@@ -822,6 +822,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </body>
 </html>
+
 
 
 
