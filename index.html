@@ -861,7 +861,8 @@ async function renderSections() {
     list.innerHTML = '';
     let sections = await loadSections();
     
-    // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE
+    // MODIFICATION : CONSERVER LE TRI PAR DATE DANS L'AFFICHAGE PRINCIPAL
+    // Mais pour l'admin, on peut garder l'ordre alphabétique pour plus de clarté
     sections.sort((a, b) => {
       const nameA = (a.name || '').toLowerCase();
       const nameB = (b.name || '').toLowerCase();
@@ -900,14 +901,14 @@ async function updateSectionSelects(sections) {
 
   sel.innerHTML = '<option value="">-- Choisir une section --</option>';
   
-  // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE
-  sections.sort((a, b) => {
+  // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE UNIQUEMENT POUR LE SELECT
+  const sortedSections = [...sections].sort((a, b) => {
     const nameA = (a.name || '').toLowerCase();
     const nameB = (b.name || '').toLowerCase();
     return nameA.localeCompare(nameB);
   });
   
-  sections.forEach(s => {
+  sortedSections.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s._id || s.id;
     opt.textContent = s.name;
@@ -922,14 +923,14 @@ async function renderSectionFilter() {
   sel.innerHTML = '<option value="">Toutes les sections</option>';
   let sections = await loadSections();
   
-  // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE
-  sections.sort((a, b) => {
+  // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE UNIQUEMENT POUR LE FILTRE
+  const sortedSections = [...sections].sort((a, b) => {
     const nameA = (a.name || '').toLowerCase();
     const nameB = (b.name || '').toLowerCase();
     return nameA.localeCompare(nameB);
   });
   
-  sections.forEach(s => {
+  sortedSections.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s._id || s.id;
     opt.textContent = s.name;
@@ -1153,7 +1154,7 @@ function whatsappUrl(p) {
   return base + '?text=' + encodeURIComponent(msg);
 }
 
-// Navigation par sections - VERSION AVEC MENU COMPACT ET TRI ALPHABÉTIQUE
+// Navigation par sections - VERSION AVEC MENU COMPACT ET TRI ALPHABÉTIQUE UNIQUEMENT POUR LES MENUS
 function buildSectionNav(sections) {
   const nav = $('#section-nav');
   const sidebarButtons = $('#section-nav-sidebar-buttons');
@@ -1193,15 +1194,15 @@ function buildSectionNav(sections) {
   };
   sidebarButtons.appendChild(allBtnSidebar);
 
-  // MODIFICATION : TRIER LES SECTIONS PAR ORDRE ALPHABÉTIQUE
-  sections.sort((a, b) => {
+  // MODIFICATION : TRIER LES SECTIONS PAR ORDRE ALPHABÉTIQUE UNIQUEMENT POUR LES MENUS
+  const sortedSections = [...sections].sort((a, b) => {
     const nameA = (a.name || '').toLowerCase();
     const nameB = (b.name || '').toLowerCase();
     return nameA.localeCompare(nameB);
   });
 
   // Boutons pour chaque section
-  sections.forEach(s => {
+  sortedSections.forEach(s => {
     const sectionId = s._id || s.id;
     const sectionName = s.name;
     
@@ -1359,7 +1360,7 @@ function matchesSearch(product, sectionName, searchWords) {
   );
 }
 
-// Affichage des produits - VERSION CORRIGÉE SANS DOUBLONS ET AVEC RECHERCHE PAR MOTS
+// Affichage des produits - CONSERVER LE TRI PAR DATE POUR L'AFFICHAGE DES SECTIONS
 async function renderProducts() {
   try {
     console.log('🔄 Début de renderProducts');
@@ -1401,11 +1402,11 @@ async function renderProducts() {
       });
     }
 
-    // MODIFICATION : TRIER LES SECTIONS PAR ORDRE ALPHABÉTIQUE
+    // MODIFICATION : CONSERVER LE TRI PAR DATE POUR L'AFFICHAGE DES SECTIONS DANS LA PAGE
     sections.sort((a, b) => {
-      const nameA = (a.name || '').toLowerCase();
-      const nameB = (b.name || '').toLowerCase();
-      return nameA.localeCompare(nameB);
+      const dateA = new Date(a.updatedAt || a.createdAt || a._id);
+      const dateB = new Date(b.updatedAt || b.createdAt || b._id);
+      return dateB - dateA; // Décroissant
     });
 
     // CORRECTION : Utiliser un Set pour éviter les doublons
