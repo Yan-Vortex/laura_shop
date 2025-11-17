@@ -17,8 +17,9 @@
 *{box-sizing:border-box;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
 body{margin:0;background:linear-gradient(180deg,#f7fbfb 0%,var(--bg) 100%);color:#111}
 header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;background:transparent}
-.brand{display:flex;gap:12px;align-items:center}
-.logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#a569bd);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+.brand{display:flex;gap:12px;align-items:center;position:relative}
+.logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#a569bd);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;cursor:pointer;position:relative}
+#admin-btn{position:absolute;top:0;left:0;width:44px;height:44px;opacity:0;cursor:pointer;z-index:2}
 .title{font-size:18px;font-weight:700}
 nav{display:flex;gap:10px;align-items:center}
 button, .btn{background:var(--accent);color:#fff;border:0;padding:10px 14px;border-radius:10px;cursor:pointer;box-shadow:var(--shadow)}
@@ -39,6 +40,10 @@ input[type=text], input[type=search], textarea, select{width:100%;padding:10px;b
 .price{font-weight:800;font-size:16px}
 .card-actions{display:flex;gap:8px;align-items:center}
 .small{padding:8px 10px;border-radius:10px;font-size:13px}
+
+.card-actions a {
+  text-decoration: none;
+}
 
 footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
 
@@ -165,19 +170,19 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
 #section-nav-sidebar {
   position: fixed;
   top: 0;
-  left: -300px;  /* Changé à left */
+  left: -300px;
   width: 280px;
   height: 100%;
   background: white;
-  box-shadow: 2px 0 10px rgba(0,0,0,0.1); /* Ombre inversée */
+  box-shadow: 2px 0 10px rgba(0,0,0,0.1);
   z-index: 101;
-  transition: left 0.3s ease; /* Changé à left */
+  transition: left 0.3s ease;
   padding: 20px;
   overflow-y: auto;
 }
 
 #section-nav-sidebar.show {
-  left: 0; /* Changé à left */
+  left: 0;
 }
 
 #section-nav-sidebar h3 {
@@ -218,7 +223,7 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
 #close-sidebar {
   position: absolute;
   top: 15px;
-  right: 15px; /* Garde à droite pour le bouton fermer */
+  right: 15px;
   background: none;
   border: none;
   font-size: 24px;
@@ -344,7 +349,9 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
 <body>
 <header>
   <div class="brand">
-    <div class="logo">LS</div>
+    <div class="logo">LS
+      <button id="admin-btn" class="btn secondary"></button>
+    </div>
     <div>
       <div class="title" id="shop-name">Laura Shop's</div>
       <div class="muted" id="shop-sub">Marketplace</div>
@@ -355,7 +362,6 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
       <div class="chip" id="lang-fr">FR</div>
       <div class="chip" id="lang-en">EN</div>
     </div>
-    <button id="admin-btn" class="btn secondary">Admin</button>
   </nav>
 </header>
 
@@ -1315,7 +1321,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('#section-nav-overlay').onclick = closeSidebar;
 
     // Événements
-    $('#admin-btn').onclick = () => {
+    $('.logo').onclick = () => {
       const pw = prompt("Réservé à l'administrateur");
       if (pw === CONFIG.defaultPassword) {
         setAdmin(true);
@@ -1379,4 +1385,3 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </body>
 </html>
-
