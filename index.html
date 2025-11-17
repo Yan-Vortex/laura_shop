@@ -1509,8 +1509,8 @@ async function renderProducts() {
       grid.appendChild(secDiv);
     }
 
-    // Afficher les produits sans section UNIQUEMENT si pas de filtre actif
-    if (!sectionFilter) {
+   // Afficher les produits sans section UNIQUEMENT si pas de filtre actif ET pas de recherche
+    if (!sectionFilter && !q) {
       const productsWithoutSection = sortedProducts.filter(p => {
         const productId = p._id || p.id;
         // Éviter les doublons avec les produits déjà affichés
@@ -1519,10 +1519,12 @@ async function renderProducts() {
         }
         return !p.sectionId || p.sectionId === 'undefined' || p.sectionId === 'null';
       });
-
-      // Appliquer la recherche aux produits sans section - MODIFICATION : Utiliser la nouvelle fonction de recherche
+    
+      // MODIFICATION : Ne pas afficher les produits sans section pendant une recherche
       let filteredProductsWithoutSection = productsWithoutSection;
       if (searchWords.length > 0) {
+        filteredProductsWithoutSection = []; // Vide pendant la recherche
+      } else {
         filteredProductsWithoutSection = productsWithoutSection.filter(p => {
           return matchesSearch(p, '', searchWords);
         });
@@ -1739,3 +1741,4 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </body>
 </html>
+
