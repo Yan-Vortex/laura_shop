@@ -602,6 +602,12 @@ input:focus-visible {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+.loading-status {
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
 </style>
 </head>
 <body>
@@ -656,6 +662,7 @@ input:focus-visible {
       <div class="loading">
         <div class="spinner"></div>
         <div>Chargement des produits...</div>
+        <div class="loading-status" id="loading-status">Initialisation...</div>
       </div>
     </div>
   </section>
@@ -726,19 +733,40 @@ const CONFIG = {
   shopName: "Laura Shop's"
 };
 
-// API endpoints - AJOUT DU CACHE POUR PERFORMANCE
+// API endpoints
 const API = {
   base: 'https://api-fugh.onrender.com',
   sections: 'https://api-fugh.onrender.com/sections',
   products: 'https://api-fugh.onrender.com/products'
 };
 
-// Cache pour les données
+// CACHE AGGRESSIF POUR AFFICHAGE INSTANTANÉ
 let dataCache = {
   products: null,
   sections: null,
   lastFetch: 0
 };
+
+// PRÉCHARGEMENT IMMÉDIAT DU CACHE
+(function preloadCache() {
+  try {
+    const cachedProducts = localStorage.getItem('laura_shop_products');
+    const cachedSections = localStorage.getItem('laura_shop_sections');
+    const cacheTime = localStorage.getItem('laura_shop_cache_time');
+    
+    if (cachedProducts && cachedSections && cacheTime) {
+      dataCache.products = JSON.parse(cachedProducts);
+      dataCache.sections = JSON.parse(cachedSections);
+      dataCache.lastFetch = parseInt(cacheTime);
+      console.log('⚡ Cache préchargé:', { 
+        products: dataCache.products.length,
+        sections: dataCache.sections.length 
+      });
+    }
+  } catch (e) {
+    console.log('❌ Erreur préchargement cache:', e);
+  }
+})();
 
 // Utilitaires
 const $ = s => document.querySelector(s);
@@ -756,37 +784,148 @@ const t = k => TEXT[LANG][k] || k;
 // Fonction de normalisation pour la recherche
 const normalizeString = str => String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-// FONCTIONS API OPTIMISÉES AVEC CACHE
+// FONCTION API ULTRA-OPTIMISÉE AVEC CACHE INSTANTANÉ
 async function apiGet(url, useCache = true) {
-  // Utiliser le cache si disponible et récent (5 minutes)
   const cacheKey = url.includes('products') ? 'products' : 'sections';
-  if (useCache && dataCache[cacheKey] && (Date.now() - dataCache.lastFetch < 300000)) {
-    console.log('📦 Utilisation du cache pour:', cacheKey);
+  
+  // 1. CACHE MEMOIRE - Instantané (0ms)
+  if (useCache && dataCache[cacheKey] && (Date.now() - dataCache.lastFetch < 1800000)) { // 30 minutes
+    console.log('📦 Utilisation du cache mémoire pour:', cacheKey);
     return dataCache[cacheKey];
   }
 
+  // 2. CACHE LOCALSTORAGE - Très rapide (<10ms)
+  try {
+    const cached = localStorage.getItem(`laura_shop_${cacheKey}`);
+    const cacheTime = localStorage.getItem(`laura_shop_cache_time`);
+    
+    if (useCache && cached && cacheTime && (Date.now() - parseInt(cacheTime) < 3600000)) { // 1 heure
+      console.log('💾 Utilisation du cache localStorage');
+      dataCache[cacheKey] = JSON.parse(cached);
+      dataCache.lastFetch = parseInt(cacheTime);
+      return dataCache[cacheKey];
+    }
+  } catch (e) {
+    console.log('⚠️ Erreur cache localStorage');
+  }
+
+  // 3. API - Lent (dernier recours)
   try {
     console.log('🌐 Appel API pour:', cacheKey);
-    const r = await fetch(url, { cache: 'no-store' });
+    updateLoadingStatus('Connexion à l\'API...');
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const r = await fetch(url, { 
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
     if (!r.ok) throw new Error('fetch failed');
     const data = await r.json();
     
-    // Mettre en cache
+    // Sauvegarder dans le cache pour les prochaines fois
     dataCache[cacheKey] = data;
     dataCache.lastFetch = Date.now();
     
+    try {
+      localStorage.setItem(`laura_shop_${cacheKey}`, JSON.stringify(data));
+      localStorage.setItem('laura_shop_cache_time', Date.now().toString());
+    } catch (e) {
+      console.log('⚠️ Impossible de sauvegarder dans localStorage');
+    }
+    
     return data;
   } catch (e) {
-    console.error('API GET error:', e);
-    // Retourner le cache même s'il est ancien en cas d'erreur
+    console.error('❌ API GET error:', e);
+    
+    // 4. FALLBACK - Retourner le cache même ancien
     if (dataCache[cacheKey]) {
-      console.log('⚠️ Utilisation du cache (erreur API)');
+      console.log('🔄 Utilisation du cache (erreur API)');
       return dataCache[cacheKey];
     }
+    
+    // Dernier recours: localStorage même ancien
+    try {
+      const cached = localStorage.getItem(`laura_shop_${cacheKey}`);
+      if (cached) {
+        console.log('🔄 Utilisation du cache localStorage (erreur API)');
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.log('❌ Aucun cache disponible');
+    }
+    
     return [];
   }
 }
 
+// CHARGEMENT PARALLÈLE OPTIMISÉ
+async function loadAllData() {
+  console.log('🚀 Chargement parallèle des données...');
+  try {
+    const [products, sections] = await Promise.all([
+      apiGet(API.products),
+      apiGet(API.sections)
+    ]);
+    console.log('✅ Données chargées:', { produits: products.length, sections: sections.length });
+    return { products, sections };
+  } catch (error) {
+    console.error('❌ Erreur chargement données:', error);
+    return { products: dataCache.products || [], sections: dataCache.sections || [] };
+  }
+}
+
+// Fonctions pour les sections
+async function loadSections() {
+  return await apiGet(API.sections);
+}
+
+async function addSection(section) {
+  const result = await apiPost(API.sections, section);
+  invalidateCache();
+  return result;
+}
+
+async function saveSection(section) {
+  const result = await apiPut(`${API.sections}/${section.id}`, section);
+  invalidateCache();
+  return result;
+}
+
+async function deleteSectionById(id) {
+  const result = await apiDelete(`${API.sections}/${id}`);
+  invalidateCache();
+  return result;
+}
+
+// Fonctions pour les produits
+async function loadProducts() {
+  return await apiGet(API.products);
+}
+
+async function addProduct(product) {
+  const result = await apiPost(API.products, product);
+  invalidateCache();
+  return result;
+}
+
+async function saveProduct(product) {
+  const result = await apiPut(`${API.products}/${product.id}`, product);
+  invalidateCache();
+  return result;
+}
+
+async function deleteProductById(id) {
+  const result = await apiDelete(`${API.products}/${id}`);
+  invalidateCache();
+  return result;
+}
+
+// Fonctions API de base
 async function apiPost(url, body) {
   try {
     const r = await fetch(url, {
@@ -795,10 +934,6 @@ async function apiPost(url, body) {
       body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error('post failed');
-    
-    // Invalider le cache
-    dataCache.lastFetch = 0;
-    
     return await r.json();
   } catch (e) {
     console.error('API POST error:', e);
@@ -814,10 +949,6 @@ async function apiPut(url, body) {
       body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error('put failed');
-    
-    // Invalider le cache
-    dataCache.lastFetch = 0;
-    
     return await r.json();
   } catch (e) {
     console.error('API PUT error:', e);
@@ -829,10 +960,6 @@ async function apiDelete(url) {
   try {
     const r = await fetch(url, { method: 'DELETE' });
     if (!r.ok) throw new Error('delete failed');
-    
-    // Invalider le cache
-    dataCache.lastFetch = 0;
-    
     return true;
   } catch (e) {
     console.error('API DELETE error:', e);
@@ -840,54 +967,20 @@ async function apiDelete(url) {
   }
 }
 
-// CHARGEMENT PARALLÈLE DES DONNÉES
-async function loadAllData() {
-  console.log('🚀 Chargement parallèle des données...');
+// Invalider le cache après modifications
+function invalidateCache() {
+  dataCache.lastFetch = 0;
   try {
-    const [products, sections] = await Promise.all([
-      apiGet(API.products),
-      apiGet(API.sections)
-    ]);
-    console.log('✅ Données chargées:', { produits: products.length, sections: sections.length });
-    return { products, sections };
-  } catch (error) {
-    console.error('❌ Erreur chargement données:', error);
-    return { products: [], sections: [] };
+    localStorage.removeItem('laura_shop_cache_time');
+  } catch (e) {}
+}
+
+// Mise à jour du statut de chargement
+function updateLoadingStatus(message) {
+  const statusEl = $('#loading-status');
+  if (statusEl) {
+    statusEl.textContent = message;
   }
-}
-
-// Fonctions pour les sections
-async function loadSections() {
-  return await apiGet(API.sections);
-}
-
-async function addSection(section) {
-  return await apiPost(API.sections, section);
-}
-
-async function saveSection(section) {
-  return await apiPut(`${API.sections}/${section.id}`, section);
-}
-
-async function deleteSectionById(id) {
-  return await apiDelete(`${API.sections}/${id}`);
-}
-
-// Fonctions pour les produits
-async function loadProducts() {
-  return await apiGet(API.products);
-}
-
-async function addProduct(product) {
-  return await apiPost(API.products, product);
-}
-
-async function saveProduct(product) {
-  return await apiPut(`${API.products}/${product.id}`, product);
-}
-
-async function deleteProductById(id) {
-  return await apiDelete(`${API.products}/${id}`);
 }
 
 // Gestion de l'admin
@@ -1105,8 +1198,6 @@ async function addOrUpdate() {
     const d = $('#desc-input').value.trim();
     const secId = $('#section-select').value;
 
-    console.log('🔍 Section ID récupérée:', secId, 'Type:', typeof secId);
-
     if (!n) return alert('Nom requis');
     if (!secId || secId === '' || secId === 'undefined') {
       return alert('Section requise - Veuillez sélectionner une section valide');
@@ -1123,21 +1214,12 @@ async function addOrUpdate() {
       formData.append('image', f);
     }
 
-    console.log('📤 Envoi des données:', { 
-      name: n, 
-      price: pr, 
-      description: d, 
-      sectionId: secId, 
-      hasImage: !!f 
-    });
-
     let result;
     if (editingId) {
       const response = await fetch(`${API.products}/${editingId}`, {
         method: 'PUT',
         body: formData
       });
-      console.log('📝 Réponse modification:', response.status);
       if (!response.ok) throw new Error('Erreur lors de la modification');
       result = await response.json();
     } else {
@@ -1145,18 +1227,17 @@ async function addOrUpdate() {
         method: 'POST',
         body: formData
       });
-      console.log('➕ Réponse ajout:', response.status);
       if (!response.ok) throw new Error('Erreur lors de l\'ajout');
       result = await response.json();
     }
 
-    console.log('✅ Produit créé/modifié:', result);
-
     clearForm();
+    invalidateCache();
     
-    // FORCER LE RAFRAÎCHISSEMENT COMPLET POUR VOIR LA NOUVELLE SECTION EN HAUT
-    setTimeout(() => {
-      location.reload();
+    // Recharger les données
+    setTimeout(async () => {
+      await loadAllData();
+      await renderProducts();
     }, 500);
     
   } catch (error) {
@@ -1216,6 +1297,7 @@ async function handleDeleteProduct(id) {
 
   try {
     await deleteProductById(id);
+    invalidateCache();
     await renderProducts();
   } catch (error) {
     console.error('Error in handleDeleteProduct:', error);
@@ -1248,7 +1330,6 @@ function buildSectionNav(sections) {
   allBtn.textContent = 'Toutes';
   allBtn.classList.add('active');
   allBtn.onclick = () => {
-    console.log('🎯 Clic sur "Toutes"');
     qs('#section-nav button').forEach(b => b.classList.remove('active'));
     qs('#section-nav-sidebar-buttons button').forEach(b => b.classList.remove('active'));
     allBtn.classList.add('active');
@@ -1263,7 +1344,6 @@ function buildSectionNav(sections) {
   allBtnSidebar.textContent = 'Toutes';
   allBtnSidebar.classList.add('active');
   allBtnSidebar.onclick = () => {
-    console.log('🎯 Clic sur "Toutes" (sidebar)');
     qs('#section-nav button').forEach(b => b.classList.remove('active'));
     qs('#section-nav-sidebar-buttons button').forEach(b => b.classList.remove('active'));
     allBtnSidebar.classList.add('active');
@@ -1283,8 +1363,6 @@ function buildSectionNav(sections) {
   sortedSections.forEach(s => {
     const sectionId = s._id || s.id;
     const sectionName = s.name;
-    
-    console.log('📋 Création bouton pour la section:', sectionName, 'ID:', sectionId);
 
     // Bouton pour la navigation principale
     const btn = document.createElement('button');
@@ -1292,17 +1370,12 @@ function buildSectionNav(sections) {
     btn.setAttribute('data-section-id', sectionId);
     
     btn.onclick = () => {
-      console.log('🎯 Clic sur section:', sectionName, 'ID:', sectionId);
-      
-      // Mettre à jour les classes actives
       qs('#section-nav button').forEach(b => b.classList.remove('active'));
       qs('#section-nav-sidebar-buttons button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       
-      // Mettre à jour le filtre et rafraîchir
       $('#section-filter').value = sectionId;
       renderProducts().then(() => {
-        // Scroll vers la section après le rendu
         const sectionElement = document.querySelector(`[data-section="${sectionId}"]`);
         if (sectionElement) {
           sectionElement.scrollIntoView({ 
@@ -1322,17 +1395,12 @@ function buildSectionNav(sections) {
     btnSidebar.setAttribute('data-section-id', sectionId);
     
     btnSidebar.onclick = () => {
-      console.log('🎯 Clic sur section (sidebar):', sectionName, 'ID:', sectionId);
-      
-      // Mettre à jour les classes actives
       qs('#section-nav button').forEach(b => b.classList.remove('active'));
       qs('#section-nav-sidebar-buttons button').forEach(b => b.classList.remove('active'));
       btnSidebar.classList.add('active');
       
-      // Mettre à jour le filtre et rafraîchir
       $('#section-filter').value = sectionId;
       renderProducts().then(() => {
-        // Scroll vers la section après le rendu
         const sectionElement = document.querySelector(`[data-section="${sectionId}"]`);
         if (sectionElement) {
           sectionElement.scrollIntoView({ 
@@ -1348,8 +1416,6 @@ function buildSectionNav(sections) {
     
     sidebarButtons.appendChild(btnSidebar);
   });
-
-  console.log('✅ Navigation par sections créée avec', sections.length, 'sections');
 }
 
 // Gestion du menu latéral
@@ -1397,14 +1463,12 @@ function syncSectionFilter() {
 
 // Optimisations mobiles
 function initMobileOptimizations() {
-  // Détection tactile
   let isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   
   if (isTouchDevice) {
     document.body.classList.add('touch-device');
   }
   
-  // Gestion du clavier virtuel
   window.addEventListener('resize', () => {
     if (window.innerHeight < 500) {
       document.body.classList.add('keyboard-open');
@@ -1416,10 +1480,8 @@ function initMobileOptimizations() {
 
 function optimizeProductImages() {
   qs('.thumb img').forEach(img => {
-    // Ajouter lazy loading
     img.loading = 'lazy';
     
-    // Optimiser pour le mobile
     if (window.innerWidth < 768) {
       img.style.maxWidth = '100%';
       img.style.height = 'auto';
@@ -1432,20 +1494,29 @@ function matchesSearch(product, sectionName, searchWords) {
   const productText = normalizeString((product.name || '') + ' ' + (product.description || ''));
   const sectionText = normalizeString(sectionName || '');
   
-  // Vérifier que TOUS les mots de recherche sont présents
   return searchWords.every(word => 
     productText.includes(word) || sectionText.includes(word)
   );
 }
 
-// AFFICHAGE DES PRODUITS CORRIGÉ - PAS DE DOUBLONS
+// AFFICHAGE DES PRODUITS OPTIMISÉ
 async function renderProducts(products = null, sections = null) {
   try {
     console.log('🔄 Début de renderProducts');
     const grid = $('#products-grid');
-    if (!grid) {
-      console.error('❌ products-grid non trouvé');
-      return;
+    if (!grid) return;
+
+    // AFFICHAGE INSTANTANÉ AVEC CACHE
+    if (dataCache.products && dataCache.sections) {
+      console.log('⚡ Affichage instantané depuis le cache');
+      products = dataCache.products;
+      sections = dataCache.sections;
+      updateLoadingStatus('Affichage des produits...');
+    } else if (!products || !sections) {
+      updateLoadingStatus('Chargement des données...');
+      const data = await loadAllData();
+      products = data.products;
+      sections = data.sections;
     }
 
     // Masquer l'indicateur de chargement
@@ -1454,33 +1525,20 @@ async function renderProducts(products = null, sections = null) {
 
     grid.innerHTML = '';
 
-    // Utiliser les données fournies ou les charger
-    if (!products || !sections) {
-      const data = await loadAllData();
-      products = data.products;
-      sections = data.sections;
-    }
-
-    console.log('📦 Produits chargés:', products.length);
-    console.log('📁 Sections chargées:', sections.length);
-
     const q = $('#search').value.trim();
     const sectionFilter = $('#section-filter').value;
     const sortVal = $('#sort').value;
 
-    console.log('🔍 Filtres - Recherche:', q, 'Section:', sectionFilter, 'Tri:', sortVal);
-
     // Diviser la recherche en mots individuels
     const searchWords = q ? normalizeString(q).split(/\s+/).filter(word => word.length > 0) : [];
 
-    // Trier les produits - LES PLUS RÉCENTS EN PREMIER
+    // Trier les produits
     let sortedProducts = [...products];
     if (sortVal === 'price-asc') {
       sortedProducts.sort((a, b) => a.price - b.price);
     } else if (sortVal === 'price-desc') {
       sortedProducts.sort((a, b) => b.price - a.price);
     } else {
-      // Tri par défaut : ID décroissant (les plus récents en premier)
       sortedProducts.sort((a, b) => {
         const idA = a._id || a.id;
         const idB = b._id || b.id;
@@ -1488,14 +1546,14 @@ async function renderProducts(products = null, sections = null) {
       });
     }
 
-    // Trier les sections par date (les plus récentes en premier)
+    // Trier les sections par date
     sections.sort((a, b) => {
       const dateA = new Date(a.updatedAt || a.createdAt || a._id);
       const dateB = new Date(b.updatedAt || b.createdAt || b._id);
-      return dateB - dateA; // Décroissant
+      return dateB - dateA;
     });
 
-    // CORRECTION CRITIQUE : Utiliser un Set pour éviter les doublons
+    // CORRECTION : Utiliser un Set pour éviter les doublons
     const displayedProductIds = new Set();
     let hasDisplayedProducts = false;
 
@@ -1506,17 +1564,15 @@ async function renderProducts(products = null, sections = null) {
 
       // Appliquer le filtre de section
       if (sectionFilter && sectionId !== sectionFilter) {
-        console.log(`⏩ Section "${sectionName}" ignorée (filtre: ${sectionFilter})`);
         continue;
       }
 
       let sectProducts = sortedProducts.filter(p => (p.sectionId || p.sectionId) === sectionId);
 
-      // CORRECTION : Appliquer la recherche et éviter les doublons
+      // Appliquer la recherche et éviter les doublons
       if (searchWords.length > 0) {
         sectProducts = sectProducts.filter(p => {
           const productId = p._id || p.id;
-          // Éviter les doublons
           if (displayedProductIds.has(productId)) {
             return false;
           }
@@ -1528,7 +1584,6 @@ async function renderProducts(products = null, sections = null) {
           return matches;
         });
       } else {
-        // Sans recherche, simplement éviter les doublons
         sectProducts = sectProducts.filter(p => {
           const productId = p._id || p.id;
           if (displayedProductIds.has(productId)) {
@@ -1540,11 +1595,8 @@ async function renderProducts(products = null, sections = null) {
       }
 
       if (sectProducts.length === 0) {
-        console.log(`⏩ Section "${sectionName}" sans produits correspondants`);
         continue;
       }
-
-      console.log(`✅ Affichage section "${sectionName}" avec ${sectProducts.length} produits`);
 
       const secDiv = document.createElement('div');
       secDiv.setAttribute('data-section', sectionId);
@@ -1592,26 +1644,22 @@ async function renderProducts(products = null, sections = null) {
       grid.appendChild(secDiv);
     }
 
-    // CORRECTION : Afficher les produits sans section UNIQUEMENT s'il n'y a pas de recherche
+    // CORRECTION : Produits sans section uniquement sans recherche
     if (!sectionFilter && !q) {
       const productsWithoutSection = sortedProducts.filter(p => {
         const productId = p._id || p.id;
-        // Éviter les doublons avec les produits déjà affichés
         if (displayedProductIds.has(productId)) {
           return false;
         }
         return !p.sectionId || p.sectionId === 'undefined' || p.sectionId === 'null';
       });
 
-      // Ne pas afficher les produits sans section pendant une recherche
       let filteredProductsWithoutSection = productsWithoutSection;
       if (searchWords.length > 0) {
-        filteredProductsWithoutSection = []; // Vide pendant la recherche
+        filteredProductsWithoutSection = [];
       }
 
       if (filteredProductsWithoutSection.length > 0) {
-        console.log('📦 Affichage produits sans section:', filteredProductsWithoutSection.length);
-        
         const secDiv = document.createElement('div');
         secDiv.setAttribute('data-section', 'undefined');
         secDiv.innerHTML = `<h3 id="section-undefined">⚠️ Produits non classés</h3>`;
@@ -1691,7 +1739,7 @@ async function renderProducts(products = null, sections = null) {
     // Optimiser les images après rendu
     setTimeout(optimizeProductImages, 100);
 
-    console.log('✅ renderProducts terminé - Produits affichés:', hasDisplayedProducts);
+    console.log('✅ renderProducts terminé');
 
   } catch (error) {
     console.error('❌ Error in renderProducts:', error);
@@ -1716,6 +1764,84 @@ function updateAdminUI() {
   }
 }
 
+// Configuration des événements
+function setupEventListeners() {
+  // Événements pour la navigation compacte
+  $('#section-nav-toggle').onclick = openSidebar;
+  $('#close-sidebar').onclick = closeSidebar;
+  $('#section-nav-overlay').onclick = closeSidebar;
+
+  // Événements pour le bouton de suppression de recherche
+  $('#clear-search').onclick = () => {
+    $('#search').value = '';
+    renderProducts();
+  };
+
+  // Afficher/masquer le bouton de suppression en fonction du contenu
+  $('#search').oninput = function() {
+    if (this.value.trim() !== '') {
+      $('#clear-search').style.display = 'block';
+    } else {
+      $('#clear-search').style.display = 'none';
+    }
+    renderProducts();
+  };
+
+  $('.logo').onclick = () => {
+    const pw = prompt("Réservé à l'administrateur");
+    if (pw === CONFIG.defaultPassword) {
+      setAdmin(true);
+    } else {
+      alert('Mot de passe incorrect');
+    }
+  };
+
+  $('#logout').onclick = () => { 
+    setAdmin(false); 
+  };
+
+  $('#add-btn').onclick = addOrUpdate;
+  $('#cancel-edit').onclick = clearForm;
+  $('#add-section-btn').onclick = addOrUpdateSection;
+  $('#clear-section-btn').onclick = clearSectionForm;
+
+  $('#sort').onchange = renderProducts;
+  $('#section-filter').onchange = () => {
+    syncSectionFilter();
+    renderProducts();
+  };
+
+  // Toggle du panel admin
+  $('#admin-toggle').onclick = () => {
+    if (adminPanelMinimized) {
+      expandAdminPanel();
+    } else {
+      minimizeAdminPanel();
+    }
+  };
+
+  // Preview d'image
+  $('#file').onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      $('#preview').innerHTML = `<img src="${reader.result}">`;
+    };
+    reader.readAsDataURL(f);
+  };
+
+  // Changement de langue
+  $('#lang-fr').onclick = () => { LANG = 'fr'; renderProducts(); };
+  $('#lang-en').onclick = () => { LANG = 'en'; renderProducts(); };
+
+  // Modal d'image
+  $('#close-modal').onclick = () => {
+    $('#img-modal').style.display = 'none';
+  };
+}
+
 // Initialisation optimisée
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -1723,104 +1849,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     const yearEl = $('#year');
     if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-    // CHARGEMENT PARALLÈLE OPTIMISÉ
-    console.log('🚀 Initialisation du site...');
-    const data = await loadAllData();
+    // Initialisation rapide de l'interface
+    initMobileOptimizations();
+    initAdminTabs();
+    setupEventListeners();
     
-    // Initialisation de l'interface avec les données déjà chargées
-    await renderSections();
-    await renderProducts(data.products, data.sections);
+    updateLoadingStatus('Préparation de l\'affichage...');
+
+    // AFFICHAGE INSTANTANÉ - Utiliser le cache d'abord
+    if (dataCache.products && dataCache.sections) {
+      console.log('🚀 Affichage instantané depuis le cache');
+      await renderSections();
+      await renderProducts(dataCache.products, dataCache.sections);
+      updateLoadingStatus('Données chargées depuis le cache');
+    } else {
+      updateLoadingStatus('Chargement des données...');
+      // Charger les données en arrière-plan
+      loadAllData().then(async (data) => {
+        await renderSections();
+        await renderProducts(data.products, data.sections);
+      });
+    }
+
     updateAdminUI();
 
-    // Initialiser les optimisations mobiles
-    initMobileOptimizations();
-
-    // Initialiser les onglets admin
-    initAdminTabs();
-
-    // Événements pour la navigation compacte
-    $('#section-nav-toggle').onclick = openSidebar;
-    $('#close-sidebar').onclick = closeSidebar;
-    $('#section-nav-overlay').onclick = closeSidebar;
-
-    // Événements pour le bouton de suppression de recherche
-    $('#clear-search').onclick = () => {
-      $('#search').value = '';
-      renderProducts();
-    };
-
-    // Afficher/masquer le bouton de suppression en fonction du contenu
-    $('#search').oninput = function() {
-      // Afficher le bouton clear s'il y a du texte
-      if (this.value.trim() !== '') {
-        $('#clear-search').style.display = 'block';
-      } else {
-        $('#clear-search').style.display = 'none';
-      }
-      renderProducts();
-    };
-
-    // Événements
-    $('.logo').onclick = () => {
-      const pw = prompt("Réservé à l'administrateur");
-      if (pw === CONFIG.defaultPassword) {
-        setAdmin(true);
-      } else {
-        alert('Mot de passe incorrect');
-      }
-    };
-
-    $('#logout').onclick = () => { 
-      setAdmin(false); 
-    };
-
-    $('#add-btn').onclick = addOrUpdate;
-    $('#cancel-edit').onclick = clearForm;
-    $('#add-section-btn').onclick = addOrUpdateSection;
-    $('#clear-section-btn').onclick = clearSectionForm;
-
-    $('#sort').onchange = renderProducts;
-    $('#section-filter').onchange = () => {
-      syncSectionFilter();
-      renderProducts();
-    };
-
-    // Toggle du panel admin
-    $('#admin-toggle').onclick = () => {
-      if (adminPanelMinimized) {
-        expandAdminPanel();
-      } else {
-        minimizeAdminPanel();
-      }
-    };
-
-    // Preview d'image
-    $('#file').onchange = e => {
-      const f = e.target.files[0];
-      if (!f) return;
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        $('#preview').innerHTML = `<img src="${reader.result}">`;
-      };
-      reader.readAsDataURL(f);
-    };
-
-    // Changement de langue
-    $('#lang-fr').onclick = () => { LANG = 'fr'; renderProducts(); };
-    $('#lang-en').onclick = () => { LANG = 'en'; renderProducts(); };
-
-    // Modal d'image
-    $('#close-modal').onclick = () => {
-      $('#img-modal').style.display = 'none';
-    };
+    console.log('✅ Site initialisé avec succès');
 
     // Vérifier si déjà admin
     if (isAdmin()) updateAdminUI();
 
-    console.log('✅ Site initialisé avec succès');
   } catch (error) {
     console.error('Error during initialization:', error);
+    updateLoadingStatus('Erreur de chargement');
   }
 });
 </script>
