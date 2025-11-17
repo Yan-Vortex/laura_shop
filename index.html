@@ -183,17 +183,47 @@ input:focus-visible {
   background: rgba(142,68,173,0.1);
 }
 
-/* Bouton menu déroulant pour petits écrans */
+/* NOUVEAU : Icône hamburger pour le bouton menu */
 #section-nav-toggle {
   display: none;
   background: var(--accent);
   color: white;
   border: none;
-  padding: 8px 16px;
-  border-radius: 999px;
+  padding: 12px 16px;
+  border-radius: 10px;
   cursor: pointer;
   font-size: 16px;
   margin-bottom: 8px;
+  width: 50px;
+  height: 50px;
+  position: relative;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Création de l'icône hamburger avec des spans */
+.hamburger-line {
+  display: block;
+  width: 24px;
+  height: 3px;
+  background-color: white;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+/* Animation pour l'icône hamburger */
+#section-nav-toggle.active .hamburger-line:nth-child(1) {
+  transform: rotate(45deg) translate(6px, 6px);
+}
+
+#section-nav-toggle.active .hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+
+#section-nav-toggle.active .hamburger-line:nth-child(3) {
+  transform: rotate(-45deg) translate(6px, -6px);
 }
 
 /* Menu latéral pour les sections */
@@ -279,7 +309,7 @@ input:focus-visible {
   }
   
   #section-nav-toggle {
-    display: inline-block;
+    display: flex;
   }
   
   #section-nav.show-on-mobile {
@@ -631,7 +661,12 @@ input:focus-visible {
 
 <main class="container">
   <div id="section-nav-container">
-    <button id="section-nav-toggle">...</button>
+    <!-- NOUVEAU : Bouton avec icône hamburger -->
+    <button id="section-nav-toggle" aria-label="Ouvrir le menu des sections">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </button>
     <div id="section-nav"></div>
   </div>
   
@@ -1422,11 +1457,15 @@ function buildSectionNav(sections) {
 function openSidebar() {
   $('#section-nav-overlay').style.display = 'block';
   $('#section-nav-sidebar').classList.add('show');
+  // Ajouter la classe active pour l'animation hamburger
+  $('#section-nav-toggle').classList.add('active');
 }
 
 function closeSidebar() {
   $('#section-nav-overlay').style.display = 'none';
   $('#section-nav-sidebar').classList.remove('show');
+  // Retirer la classe active pour l'animation hamburger
+  $('#section-nav-toggle').classList.remove('active');
 }
 
 // Synchroniser la navigation et le select de filtre
