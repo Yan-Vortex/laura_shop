@@ -847,8 +847,7 @@ async function apiGet(url, useCache = true) {
   // 3. API - Lent (dernier recours)
   try {
     console.log('🌐 Appel API pour:', cacheKey);
-    updateLoadingStatus('Connexion à l\'API...');
-    
+        
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
     
@@ -1925,3 +1924,4 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </body>
 </html>
+
