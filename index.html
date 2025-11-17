@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
 <title>Laura Shop's — Catalogue</title>
 <style>
 :root{
@@ -53,17 +53,56 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
 .admin-panel h3 button{position:absolute;top:0;right:0;width:28px;height:28px;background:var(--accent);border:none;border-radius:50%;color:#fff;cursor:pointer;font-weight:bold;font-size:18px;display:flex;align-items:center;justify-content:center;}
 .thumb-preview{width:84px;height:84px;border-radius:10px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:8px}
 
-@media (max-width:600px){.thumb{height:140px}.grid{grid-template-columns:repeat(2,1fr);}}
+/* Animation de chargement pour images */
+.thumb {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
 
-@media (min-width:601px) and (max-width:900px){.grid{grid-template-columns:repeat(3,1fr);} }
-@media (min-width:901px){.grid{grid-template-columns:repeat(4,1fr);} }
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 
-.lang-toggle{display:flex;gap:6px}
-.chip{background:var(--glass);padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,0.04);cursor:pointer}
+/* État actif pour les boutons */
+button:active, 
+.btn:active {
+  transform: scale(0.98);
+  transition: transform 0.1s;
+}
 
-.notice{padding:10px;border-radius:10px;background:#fff;border:1px solid #eee;margin-bottom:12px}
-.muted{color:var(--muted)}
+/* Scroll fluide */
+html {
+  scroll-behavior: smooth;
+}
 
+/* Empêcher le sélection de texte accidentel */
+.card, button, .btn {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Améliorer la visibilité du focus */
+button:focus-visible,
+.btn:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Styles pour appareils tactiles */
+.touch-device .card {
+  cursor: pointer;
+}
+
+.touch-device .card:active {
+  background-color: rgba(142, 68, 173, 0.05);
+}
+
+/* Optimiser l'affichage du modal image */
 #img-modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.8);align-items:center;justify-content:center}
 #img-modal img{max-width:90%;max-height:90%;border-radius:12px;box-shadow:0 0 20px #000}
 #img-modal span{position:absolute;top:20px;right:30px;color:#fff;font-size:32px;cursor:pointer;font-weight:bold}
@@ -332,6 +371,146 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
   margin-bottom: 0;
 }
 
+/* ========== OPTIMISATIONS ANDROID ========== */
+
+/* Optimisations spécifiques Android */
+@media (max-width: 480px) {
+  .container {
+    padding: 0 12px;
+    margin: 16px auto;
+  }
+  
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .card {
+    border-radius: 10px;
+  }
+  
+  .thumb {
+    height: 180px;
+  }
+  
+  .card-body {
+    padding: 10px;
+  }
+  
+  .name {
+    font-size: 16px;
+  }
+  
+  .price {
+    font-size: 18px;
+  }
+  
+  /* Agrandir les zones cliquables */
+  .card-actions a, 
+  .card-actions button {
+    padding: 12px 16px;
+    min-height: 44px;
+    font-size: 14px;
+  }
+  
+  /* Améliorer l'espacement des contrôles */
+  .controls {
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  
+  .search, 
+  #sort, 
+  #section-filter {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  
+  /* Header plus compact */
+  header {
+    padding: 12px 15px;
+  }
+  
+  .logo {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+  }
+  
+  .title {
+    font-size: 16px;
+  }
+  
+  /* Optimiser l'affichage du modal image */
+  #img-modal img {
+    max-width: 95%;
+    max-height: 80%;
+  }
+  
+  #close-modal {
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    padding: 8px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Améliorer le panel admin sur mobile */
+  .admin-panel {
+    width: 90vw;
+    right: 5vw;
+    bottom: 10px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  
+  .admin-tabs {
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 1;
+  }
+}
+
+/* Améliorations pour les très petits écrans */
+@media (max-width: 360px) {
+  .container {
+    padding: 0 8px;
+  }
+  
+  .card-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .card-actions a,
+  .card-actions .admin-actions {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Prévenir le zoom sur les inputs */
+@media (max-width: 480px) {
+  input[type="text"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Améliorer le scroll sur Android */
+.container {
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Pour les écrans très petits */
 @media (max-width: 400px) {
   .admin-panel {
@@ -344,6 +523,12 @@ footer{padding:20px;text-align:center;color:var(--muted);font-size:14px}
     max-height: 100px;
   }
 }
+
+.lang-toggle{display:flex;gap:6px}
+.chip{background:var(--glass);padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,0.04);cursor:pointer}
+
+.notice{padding:10px;border-radius:10px;background:#fff;border:1px solid #eee;margin-bottom:12px}
+.muted{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -594,6 +779,7 @@ function hideAdminButtons() {
 // Variables d'état
 let editingId = null;
 let editingSectionId = null;
+let adminPanelMinimized = false;
 
 // Gestion des onglets admin
 function initAdminTabs() {
@@ -739,6 +925,9 @@ async function startEditSection(id) {
     qs('.tab-content').forEach(c => c.classList.remove('active'));
     $('.admin-tab[data-tab="sections"]').classList.add('active');
     $('#sections-tab').classList.add('active');
+    
+    // S'assurer que le panneau admin est ouvert et développé
+    expandAdminPanel();
   } catch (error) {
     console.error('Error in startEditSection:', error);
   }
@@ -844,6 +1033,19 @@ async function addOrUpdate() {
   }
 }
 
+// Fonctions pour gérer le panneau admin
+function expandAdminPanel() {
+  $('#admin-content').style.display = 'block';
+  $('#admin-toggle').textContent = '–';
+  adminPanelMinimized = false;
+}
+
+function minimizeAdminPanel() {
+  $('#admin-content').style.display = 'none';
+  $('#admin-toggle').textContent = '+';
+  adminPanelMinimized = true;
+}
+
 async function startEdit(id) {
   try {
     const products = await loadProducts();
@@ -865,6 +1067,9 @@ async function startEdit(id) {
     qs('.tab-content').forEach(c => c.classList.remove('active'));
     $('.admin-tab[data-tab="products"]').classList.add('active');
     $('#products-tab').classList.add('active');
+
+    // S'assurer que le panneau admin est ouvert et développé
+    expandAdminPanel();
 
     if (window.innerWidth <= 600) {
       $('#admin-panel').scrollIntoView({ behavior: 'smooth' });
@@ -1057,6 +1262,38 @@ function syncSectionFilter() {
       activeSidebarBtn.classList.add('active');
     }
   }
+}
+
+// Optimisations mobiles
+function initMobileOptimizations() {
+  // Détection tactile
+  let isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  
+  if (isTouchDevice) {
+    document.body.classList.add('touch-device');
+  }
+  
+  // Gestion du clavier virtuel
+  window.addEventListener('resize', () => {
+    if (window.innerHeight < 500) {
+      document.body.classList.add('keyboard-open');
+    } else {
+      document.body.classList.remove('keyboard-open');
+    }
+  });
+}
+
+function optimizeProductImages() {
+  qs('.thumb img').forEach(img => {
+    // Ajouter lazy loading
+    img.loading = 'lazy';
+    
+    // Optimiser pour le mobile
+    if (window.innerWidth < 768) {
+      img.style.maxWidth = '100%';
+      img.style.height = 'auto';
+    }
+  });
 }
 
 // Affichage des produits
@@ -1275,6 +1512,9 @@ async function renderProducts() {
       btn.onclick = () => handleDeleteProduct(btn.dataset.id);
     });
 
+    // Optimiser les images après rendu
+    setTimeout(optimizeProductImages, 100);
+
     console.log('✅ renderProducts terminé - Produits affichés:', hasDisplayedProducts);
 
   } catch (error) {
@@ -1312,6 +1552,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderProducts();
     updateAdminUI();
 
+    // Initialiser les optimisations mobiles
+    initMobileOptimizations();
+
     // Initialiser les onglets admin
     initAdminTabs();
 
@@ -1347,12 +1590,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // Toggle du panel admin
-    let minimized = false;
     $('#admin-toggle').onclick = () => {
-      const content = $('#admin-content');
-      minimized = !minimized;
-      content.style.display = minimized ? 'none' : 'block';
-      $('#admin-toggle').textContent = minimized ? '+' : '–';
+      if (adminPanelMinimized) {
+        expandAdminPanel();
+      } else {
+        minimizeAdminPanel();
+      }
     };
 
     // Preview d'image
