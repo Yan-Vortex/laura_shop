@@ -589,7 +589,7 @@ input:focus-visible {
 
 <main class="container">
   <div id="section-nav-container">
-    <button id="section-nav-toggle">...</button>
+    <button id="section-nav-toggle">Liste des catégories</button>
     <div id="section-nav"></div>
   </div>
   
@@ -1333,7 +1333,7 @@ function optimizeProductImages() {
   });
 }
 
-// Affichage des produits
+// Affichage des produits - VERSION CORRIGÉE SANS DOUBLONS
 async function renderProducts() {
   try {
     console.log('🔄 Début de renderProducts');
@@ -1379,15 +1379,8 @@ async function renderProducts() {
       return dateB - dateA; // Décroissant
     });
 
-    // IDs des sections correspondant à la recherche
-    const matchedSectionIds = new Set();
-    if (q) {
-      sections.forEach(s => {
-        const sectionId = s._id || s.id;
-        if (normalizeString(s.name).includes(q)) matchedSectionIds.add(sectionId);
-      });
-    }
-
+    // CORRECTION : Utiliser un Set pour éviter les doublons
+    const displayedProductIds = new Set();
     let hasDisplayedProducts = false;
 
     // Afficher par section
@@ -1403,11 +1396,36 @@ async function renderProducts() {
 
       let sectProducts = sortedProducts.filter(p => (p.sectionId || p.sectionId) === sectionId);
 
-      // Appliquer la recherche
+      // Appliquer la recherche - CORRECTION : Logique simplifiée pour éviter les doublons
       if (q) {
         sectProducts = sectProducts.filter(p => {
+          // Vérifier si le produit a déjà été affiché
+          const productId = p._id || p.id;
+          if (displayedProductIds.has(productId)) {
+            return false; // Ne pas afficher les doublons
+          }
+          
           const productText = normalizeString((p.name || '') + ' ' + (p.description || ''));
-          return productText.includes(q) || matchedSectionIds.has(sectionId);
+          const sectionText = normalizeString(sectionName);
+          
+          // Le produit correspond si son nom/description OU le nom de sa section correspond
+          const matches = productText.includes(q) || sectionText.includes(q);
+          
+          if (matches) {
+            displayedProductIds.add(productId); // Marquer comme affiché
+          }
+          
+          return matches;
+        });
+      } else {
+        // Sans recherche, simplement éviter les doublons
+        sectProducts = sectProducts.filter(p => {
+          const productId = p._id || p.id;
+          if (displayedProductIds.has(productId)) {
+            return false;
+          }
+          displayedProductIds.add(productId);
+          return true;
         });
       }
 
@@ -1466,12 +1484,26 @@ async function renderProducts() {
 
     // Afficher les produits sans section UNIQUEMENT si pas de filtre actif
     if (!sectionFilter) {
-      const productsWithoutSection = sortedProducts.filter(p => 
-        !p.sectionId || p.sectionId === 'undefined' || p.sectionId === 'null'
-      );
+      const productsWithoutSection = sortedProducts.filter(p => {
+        const productId = p._id || p.id;
+        // Éviter les doublons avec les produits déjà affichés
+        if (displayedProductIds.has(productId)) {
+          return false;
+        }
+        return !p.sectionId || p.sectionId === 'undefined' || p.sectionId === 'null';
+      });
 
-      if (productsWithoutSection.length > 0) {
-        console.log('📦 Affichage produits sans section:', productsWithoutSection.length);
+      // Appliquer la recherche aux produits sans section
+      let filteredProductsWithoutSection = productsWithoutSection;
+      if (q) {
+        filteredProductsWithoutSection = productsWithoutSection.filter(p => {
+          const productText = normalizeString((p.name || '') + ' ' + (p.description || ''));
+          return productText.includes(q);
+        });
+      }
+
+      if (filteredProductsWithoutSection.length > 0) {
+        console.log('📦 Affichage produits sans section:', filteredProductsWithoutSection.length);
         
         const secDiv = document.createElement('div');
         secDiv.setAttribute('data-section', 'undefined');
@@ -1479,7 +1511,7 @@ async function renderProducts() {
         const sectGrid = document.createElement('div');
         sectGrid.className = 'grid';
 
-        for (const product of productsWithoutSection) {
+        for (const product of filteredProductsWithoutSection) {
           const card = document.createElement('article');
           card.className = 'card';
 
