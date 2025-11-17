@@ -27,7 +27,9 @@ button, .btn{background:var(--accent);color:#fff;border:0;padding:10px 14px;bord
 
 .container{max-width:1100px;margin:26px auto;padding:0 18px}
 .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
-.search{flex:1;min-width:160px}
+.search-container{flex:1;min-width:160px;position:relative}
+.search{width:100%;padding:10px;border-radius:10px;border:1px solid #e7e7e7;padding-right:40px}
+.clear-search{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);display:none}
 input[type=text], input[type=search], textarea, select{width:100%;padding:10px;border-radius:10px;border:1px solid #e7e7e7}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
@@ -482,6 +484,11 @@ input:focus-visible {
     background: white;
     z-index: 1;
   }
+
+  /* Afficher le bouton clear sur mobile */
+  .clear-search {
+    display: block;
+  }
 }
 
 /* Améliorations pour les très petits écrans */
@@ -561,6 +568,11 @@ input:focus-visible {
   .grid{grid-template-columns:repeat(4,1fr);}
 }
 
+/* Afficher le bouton clear sur desktop aussi quand il y a du texte */
+.search:not(:placeholder-shown) + .clear-search {
+  display: block;
+}
+
 .lang-toggle{display:flex;gap:6px}
 .chip{background:var(--glass);padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,0.04);cursor:pointer}
 
@@ -589,7 +601,7 @@ input:focus-visible {
 
 <main class="container">
   <div id="section-nav-container">
-    <button id="section-nav-toggle">Liste des catégories</button>
+    <button id="section-nav-toggle">...</button>
     <div id="section-nav"></div>
   </div>
   
@@ -602,7 +614,10 @@ input:focus-visible {
   </div>
   
   <section class="controls">
-    <input id="search" class="search" type="search" placeholder="Rechercher un produit ou une section...">
+    <div class="search-container">
+      <input id="search" class="search" type="search" placeholder="Rechercher un produit ou une section...">
+      <button class="clear-search" id="clear-search">&times;</button>
+    </div>
     <select id="sort">
       <option value="">Trier</option>
       <option value="price-asc">Prix croissant</option>
@@ -846,11 +861,11 @@ async function renderSections() {
     list.innerHTML = '';
     let sections = await loadSections();
     
-    // TRIER PAR DATE DE MISE À JOUR (les plus récentes en premier)
+    // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE
     sections.sort((a, b) => {
-      const dateA = new Date(a.updatedAt || a.createdAt || a._id);
-      const dateB = new Date(b.updatedAt || b.createdAt || b._id);
-      return dateB - dateA; // Décroissant
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      return nameA.localeCompare(nameB);
     });
 
     // Liste admin
@@ -885,11 +900,11 @@ async function updateSectionSelects(sections) {
 
   sel.innerHTML = '<option value="">-- Choisir une section --</option>';
   
-  // TRIER PAR DATE DE MISE À JOUR
+  // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE
   sections.sort((a, b) => {
-    const dateA = new Date(a.updatedAt || a.createdAt || a._id);
-    const dateB = new Date(b.updatedAt || b.createdAt || b._id);
-    return dateB - dateA; // Décroissant
+    const nameA = (a.name || '').toLowerCase();
+    const nameB = (b.name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
   });
   
   sections.forEach(s => {
@@ -907,11 +922,11 @@ async function renderSectionFilter() {
   sel.innerHTML = '<option value="">Toutes les sections</option>';
   let sections = await loadSections();
   
-  // TRIER PAR DATE DE MISE À JOUR
+  // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE
   sections.sort((a, b) => {
-    const dateA = new Date(a.updatedAt || a.createdAt || a._id);
-    const dateB = new Date(b.updatedAt || b.createdAt || b._id);
-    return dateB - dateA; // Décroissant
+    const nameA = (a.name || '').toLowerCase();
+    const nameB = (b.name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
   });
   
   sections.forEach(s => {
@@ -1138,7 +1153,7 @@ function whatsappUrl(p) {
   return base + '?text=' + encodeURIComponent(msg);
 }
 
-// Navigation par sections - VERSION AVEC MENU COMPACT
+// Navigation par sections - VERSION AVEC MENU COMPACT ET TRI ALPHABÉTIQUE
 function buildSectionNav(sections) {
   const nav = $('#section-nav');
   const sidebarButtons = $('#section-nav-sidebar-buttons');
@@ -1178,11 +1193,11 @@ function buildSectionNav(sections) {
   };
   sidebarButtons.appendChild(allBtnSidebar);
 
-  // Trier les sections par date de mise à jour
+  // MODIFICATION : TRIER LES SECTIONS PAR ORDRE ALPHABÉTIQUE
   sections.sort((a, b) => {
-    const dateA = new Date(a.updatedAt || a.createdAt || a._id);
-    const dateB = new Date(b.updatedAt || b.createdAt || b._id);
-    return dateB - dateA; // Décroissant
+    const nameA = (a.name || '').toLowerCase();
+    const nameB = (b.name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
   });
 
   // Boutons pour chaque section
@@ -1333,7 +1348,18 @@ function optimizeProductImages() {
   });
 }
 
-// Affichage des produits - VERSION CORRIGÉE SANS DOUBLONS
+// MODIFICATION : Fonction de recherche améliorée - recherche par mots individuels
+function matchesSearch(product, sectionName, searchWords) {
+  const productText = normalizeString((product.name || '') + ' ' + (product.description || ''));
+  const sectionText = normalizeString(sectionName || '');
+  
+  // Vérifier que TOUS les mots de recherche sont présents
+  return searchWords.every(word => 
+    productText.includes(word) || sectionText.includes(word)
+  );
+}
+
+// Affichage des produits - VERSION CORRIGÉE SANS DOUBLONS ET AVEC RECHERCHE PAR MOTS
 async function renderProducts() {
   try {
     console.log('🔄 Début de renderProducts');
@@ -1351,11 +1377,14 @@ async function renderProducts() {
     let sections = await loadSections();
     console.log('📁 Sections chargées:', sections);
 
-    const q = normalizeString($('#search').value.trim());
+    const q = $('#search').value.trim();
     const sectionFilter = $('#section-filter').value;
     const sortVal = $('#sort').value;
 
     console.log('🔍 Filtres - Recherche:', q, 'Section:', sectionFilter, 'Tri:', sortVal);
+
+    // MODIFICATION : Diviser la recherche en mots individuels
+    const searchWords = q ? normalizeString(q).split(/\s+/).filter(word => word.length > 0) : [];
 
     // Trier les produits - LES PLUS RÉCENTS EN PREMIER
     let sortedProducts = [...products];
@@ -1372,11 +1401,11 @@ async function renderProducts() {
       });
     }
 
-    // TRIER PAR DATE DE MISE À JOUR
+    // MODIFICATION : TRIER LES SECTIONS PAR ORDRE ALPHABÉTIQUE
     sections.sort((a, b) => {
-      const dateA = new Date(a.updatedAt || a.createdAt || a._id);
-      const dateB = new Date(b.updatedAt || b.createdAt || b._id);
-      return dateB - dateA; // Décroissant
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      return nameA.localeCompare(nameB);
     });
 
     // CORRECTION : Utiliser un Set pour éviter les doublons
@@ -1396,8 +1425,8 @@ async function renderProducts() {
 
       let sectProducts = sortedProducts.filter(p => (p.sectionId || p.sectionId) === sectionId);
 
-      // Appliquer la recherche - CORRECTION : Logique simplifiée pour éviter les doublons
-      if (q) {
+      // Appliquer la recherche - MODIFICATION : Utiliser la nouvelle fonction de recherche par mots
+      if (searchWords.length > 0) {
         sectProducts = sectProducts.filter(p => {
           // Vérifier si le produit a déjà été affiché
           const productId = p._id || p.id;
@@ -1405,11 +1434,8 @@ async function renderProducts() {
             return false; // Ne pas afficher les doublons
           }
           
-          const productText = normalizeString((p.name || '') + ' ' + (p.description || ''));
-          const sectionText = normalizeString(sectionName);
-          
-          // Le produit correspond si son nom/description OU le nom de sa section correspond
-          const matches = productText.includes(q) || sectionText.includes(q);
+          // Vérifier si le produit correspond à la recherche
+          const matches = matchesSearch(p, sectionName, searchWords);
           
           if (matches) {
             displayedProductIds.add(productId); // Marquer comme affiché
@@ -1493,12 +1519,11 @@ async function renderProducts() {
         return !p.sectionId || p.sectionId === 'undefined' || p.sectionId === 'null';
       });
 
-      // Appliquer la recherche aux produits sans section
+      // Appliquer la recherche aux produits sans section - MODIFICATION : Utiliser la nouvelle fonction de recherche
       let filteredProductsWithoutSection = productsWithoutSection;
-      if (q) {
+      if (searchWords.length > 0) {
         filteredProductsWithoutSection = productsWithoutSection.filter(p => {
-          const productText = normalizeString((p.name || '') + ' ' + (p.description || ''));
-          return productText.includes(q);
+          return matchesSearch(p, '', searchWords);
         });
       }
 
@@ -1632,6 +1657,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('#close-sidebar').onclick = closeSidebar;
     $('#section-nav-overlay').onclick = closeSidebar;
 
+    // Événements pour le bouton de suppression de recherche
+    $('#clear-search').onclick = () => {
+      $('#search').value = '';
+      renderProducts();
+    };
+
+    // Afficher/masquer le bouton de suppression en fonction du contenu
+    $('#search').oninput = function() {
+      // Afficher le bouton clear s'il y a du texte
+      if (this.value.trim() !== '') {
+        $('#clear-search').style.display = 'block';
+      } else {
+        $('#clear-search').style.display = 'none';
+      }
+      renderProducts();
+    };
+
     // Événements
     $('.logo').onclick = () => {
       const pw = prompt("Réservé à l'administrateur");
@@ -1651,7 +1693,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('#add-section-btn').onclick = addOrUpdateSection;
     $('#clear-section-btn').onclick = clearSectionForm;
 
-    $('#search').oninput = renderProducts;
     $('#sort').onchange = renderProducts;
     $('#section-filter').onchange = () => {
       syncSectionFilter();
