@@ -578,6 +578,30 @@ input:focus-visible {
 
 .notice{padding:10px;border-radius:10px;background:#fff;border:1px solid #eee;margin-bottom:12px}
 .muted{color:var(--muted)}
+
+/* Indicateur de chargement */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 </style>
 </head>
 <body>
@@ -628,7 +652,12 @@ input:focus-visible {
     </select>
   </section>
   <section id="catalogue">
-    <div id="products-grid"></div>
+    <div id="products-grid">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>Chargement des produits...</div>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -697,11 +726,18 @@ const CONFIG = {
   shopName: "Laura Shop's"
 };
 
-// API endpoints
+// API endpoints - AJOUT DU CACHE POUR PERFORMANCE
 const API = {
   base: 'https://api-fugh.onrender.com',
   sections: 'https://api-fugh.onrender.com/sections',
   products: 'https://api-fugh.onrender.com/products'
+};
+
+// Cache pour les données
+let dataCache = {
+  products: null,
+  sections: null,
+  lastFetch: 0
 };
 
 // Utilitaires
@@ -720,14 +756,33 @@ const t = k => TEXT[LANG][k] || k;
 // Fonction de normalisation pour la recherche
 const normalizeString = str => String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-// Fonctions API
-async function apiGet(url) {
+// FONCTIONS API OPTIMISÉES AVEC CACHE
+async function apiGet(url, useCache = true) {
+  // Utiliser le cache si disponible et récent (5 minutes)
+  const cacheKey = url.includes('products') ? 'products' : 'sections';
+  if (useCache && dataCache[cacheKey] && (Date.now() - dataCache.lastFetch < 300000)) {
+    console.log('📦 Utilisation du cache pour:', cacheKey);
+    return dataCache[cacheKey];
+  }
+
   try {
+    console.log('🌐 Appel API pour:', cacheKey);
     const r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) throw new Error('fetch failed');
-    return await r.json();
+    const data = await r.json();
+    
+    // Mettre en cache
+    dataCache[cacheKey] = data;
+    dataCache.lastFetch = Date.now();
+    
+    return data;
   } catch (e) {
     console.error('API GET error:', e);
+    // Retourner le cache même s'il est ancien en cas d'erreur
+    if (dataCache[cacheKey]) {
+      console.log('⚠️ Utilisation du cache (erreur API)');
+      return dataCache[cacheKey];
+    }
     return [];
   }
 }
@@ -740,6 +795,10 @@ async function apiPost(url, body) {
       body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error('post failed');
+    
+    // Invalider le cache
+    dataCache.lastFetch = 0;
+    
     return await r.json();
   } catch (e) {
     console.error('API POST error:', e);
@@ -755,6 +814,10 @@ async function apiPut(url, body) {
       body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error('put failed');
+    
+    // Invalider le cache
+    dataCache.lastFetch = 0;
+    
     return await r.json();
   } catch (e) {
     console.error('API PUT error:', e);
@@ -766,10 +829,30 @@ async function apiDelete(url) {
   try {
     const r = await fetch(url, { method: 'DELETE' });
     if (!r.ok) throw new Error('delete failed');
+    
+    // Invalider le cache
+    dataCache.lastFetch = 0;
+    
     return true;
   } catch (e) {
     console.error('API DELETE error:', e);
     return false;
+  }
+}
+
+// CHARGEMENT PARALLÈLE DES DONNÉES
+async function loadAllData() {
+  console.log('🚀 Chargement parallèle des données...');
+  try {
+    const [products, sections] = await Promise.all([
+      apiGet(API.products),
+      apiGet(API.sections)
+    ]);
+    console.log('✅ Données chargées:', { produits: products.length, sections: sections.length });
+    return { products, sections };
+  } catch (error) {
+    console.error('❌ Erreur chargement données:', error);
+    return { products: [], sections: [] };
   }
 }
 
@@ -861,8 +944,6 @@ async function renderSections() {
     list.innerHTML = '';
     let sections = await loadSections();
     
-    // MODIFICATION : CONSERVER LE TRI PAR DATE DANS L'AFFICHAGE PRINCIPAL
-    // Mais pour l'admin, on peut garder l'ordre alphabétique pour plus de clarté
     sections.sort((a, b) => {
       const nameA = (a.name || '').toLowerCase();
       const nameB = (b.name || '').toLowerCase();
@@ -901,7 +982,6 @@ async function updateSectionSelects(sections) {
 
   sel.innerHTML = '<option value="">-- Choisir une section --</option>';
   
-  // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE UNIQUEMENT POUR LE SELECT
   const sortedSections = [...sections].sort((a, b) => {
     const nameA = (a.name || '').toLowerCase();
     const nameB = (b.name || '').toLowerCase();
@@ -923,7 +1003,6 @@ async function renderSectionFilter() {
   sel.innerHTML = '<option value="">Toutes les sections</option>';
   let sections = await loadSections();
   
-  // MODIFICATION : TRIER PAR ORDRE ALPHABÉTIQUE UNIQUEMENT POUR LE FILTRE
   const sortedSections = [...sections].sort((a, b) => {
     const nameA = (a.name || '').toLowerCase();
     const nameB = (b.name || '').toLowerCase();
@@ -1154,7 +1233,7 @@ function whatsappUrl(p) {
   return base + '?text=' + encodeURIComponent(msg);
 }
 
-// Navigation par sections - VERSION AVEC MENU COMPACT ET TRI ALPHABÉTIQUE UNIQUEMENT POUR LES MENUS
+// Navigation par sections
 function buildSectionNav(sections) {
   const nav = $('#section-nav');
   const sidebarButtons = $('#section-nav-sidebar-buttons');
@@ -1194,7 +1273,6 @@ function buildSectionNav(sections) {
   };
   sidebarButtons.appendChild(allBtnSidebar);
 
-  // MODIFICATION : TRIER LES SECTIONS PAR ORDRE ALPHABÉTIQUE UNIQUEMENT POUR LES MENUS
   const sortedSections = [...sections].sort((a, b) => {
     const nameA = (a.name || '').toLowerCase();
     const nameB = (b.name || '').toLowerCase();
@@ -1349,7 +1427,7 @@ function optimizeProductImages() {
   });
 }
 
-// MODIFICATION : Fonction de recherche améliorée - recherche par mots individuels
+// FONCTION DE RECHERCHE CORRIGÉE - PAS DE DOUBLONS
 function matchesSearch(product, sectionName, searchWords) {
   const productText = normalizeString((product.name || '') + ' ' + (product.description || ''));
   const sectionText = normalizeString(sectionName || '');
@@ -1360,8 +1438,8 @@ function matchesSearch(product, sectionName, searchWords) {
   );
 }
 
-// Affichage des produits - CONSERVER LE TRI PAR DATE POUR L'AFFICHAGE DES SECTIONS
-async function renderProducts() {
+// AFFICHAGE DES PRODUITS CORRIGÉ - PAS DE DOUBLONS
+async function renderProducts(products = null, sections = null) {
   try {
     console.log('🔄 Début de renderProducts');
     const grid = $('#products-grid');
@@ -1370,13 +1448,21 @@ async function renderProducts() {
       return;
     }
 
+    // Masquer l'indicateur de chargement
+    const loadingEl = $('.loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+
     grid.innerHTML = '';
 
-    const products = await loadProducts();
-    console.log('📦 Produits chargés:', products);
+    // Utiliser les données fournies ou les charger
+    if (!products || !sections) {
+      const data = await loadAllData();
+      products = data.products;
+      sections = data.sections;
+    }
 
-    let sections = await loadSections();
-    console.log('📁 Sections chargées:', sections);
+    console.log('📦 Produits chargés:', products.length);
+    console.log('📁 Sections chargées:', sections.length);
 
     const q = $('#search').value.trim();
     const sectionFilter = $('#section-filter').value;
@@ -1384,7 +1470,7 @@ async function renderProducts() {
 
     console.log('🔍 Filtres - Recherche:', q, 'Section:', sectionFilter, 'Tri:', sortVal);
 
-    // MODIFICATION : Diviser la recherche en mots individuels
+    // Diviser la recherche en mots individuels
     const searchWords = q ? normalizeString(q).split(/\s+/).filter(word => word.length > 0) : [];
 
     // Trier les produits - LES PLUS RÉCENTS EN PREMIER
@@ -1402,14 +1488,14 @@ async function renderProducts() {
       });
     }
 
-    // MODIFICATION : CONSERVER LE TRI PAR DATE POUR L'AFFICHAGE DES SECTIONS DANS LA PAGE
+    // Trier les sections par date (les plus récentes en premier)
     sections.sort((a, b) => {
       const dateA = new Date(a.updatedAt || a.createdAt || a._id);
       const dateB = new Date(b.updatedAt || b.createdAt || b._id);
       return dateB - dateA; // Décroissant
     });
 
-    // CORRECTION : Utiliser un Set pour éviter les doublons
+    // CORRECTION CRITIQUE : Utiliser un Set pour éviter les doublons
     const displayedProductIds = new Set();
     let hasDisplayedProducts = false;
 
@@ -1426,22 +1512,19 @@ async function renderProducts() {
 
       let sectProducts = sortedProducts.filter(p => (p.sectionId || p.sectionId) === sectionId);
 
-      // Appliquer la recherche - MODIFICATION : Utiliser la nouvelle fonction de recherche par mots
+      // CORRECTION : Appliquer la recherche et éviter les doublons
       if (searchWords.length > 0) {
         sectProducts = sectProducts.filter(p => {
-          // Vérifier si le produit a déjà été affiché
           const productId = p._id || p.id;
+          // Éviter les doublons
           if (displayedProductIds.has(productId)) {
-            return false; // Ne pas afficher les doublons
+            return false;
           }
           
-          // Vérifier si le produit correspond à la recherche
           const matches = matchesSearch(p, sectionName, searchWords);
-          
           if (matches) {
-            displayedProductIds.add(productId); // Marquer comme affiché
+            displayedProductIds.add(productId);
           }
-          
           return matches;
         });
       } else {
@@ -1509,7 +1592,7 @@ async function renderProducts() {
       grid.appendChild(secDiv);
     }
 
-   // Afficher les produits sans section UNIQUEMENT si pas de filtre actif ET pas de recherche
+    // CORRECTION : Afficher les produits sans section UNIQUEMENT s'il n'y a pas de recherche
     if (!sectionFilter && !q) {
       const productsWithoutSection = sortedProducts.filter(p => {
         const productId = p._id || p.id;
@@ -1519,15 +1602,11 @@ async function renderProducts() {
         }
         return !p.sectionId || p.sectionId === 'undefined' || p.sectionId === 'null';
       });
-    
-      // MODIFICATION : Ne pas afficher les produits sans section pendant une recherche
+
+      // Ne pas afficher les produits sans section pendant une recherche
       let filteredProductsWithoutSection = productsWithoutSection;
       if (searchWords.length > 0) {
         filteredProductsWithoutSection = []; // Vide pendant la recherche
-      } else {
-        filteredProductsWithoutSection = productsWithoutSection.filter(p => {
-          return matchesSearch(p, '', searchWords);
-        });
       }
 
       if (filteredProductsWithoutSection.length > 0) {
@@ -1637,16 +1716,20 @@ function updateAdminUI() {
   }
 }
 
-// Initialisation
+// Initialisation optimisée
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     // Année du footer
     const yearEl = $('#year');
     if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-    // Initialisation de l'interface
+    // CHARGEMENT PARALLÈLE OPTIMISÉ
+    console.log('🚀 Initialisation du site...');
+    const data = await loadAllData();
+    
+    // Initialisation de l'interface avec les données déjà chargées
     await renderSections();
-    await renderProducts();
+    await renderProducts(data.products, data.sections);
     updateAdminUI();
 
     // Initialiser les optimisations mobiles
@@ -1734,6 +1817,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Vérifier si déjà admin
     if (isAdmin()) updateAdminUI();
+
+    console.log('✅ Site initialisé avec succès');
   } catch (error) {
     console.error('Error during initialization:', error);
   }
@@ -1741,4 +1826,3 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </body>
 </html>
-
